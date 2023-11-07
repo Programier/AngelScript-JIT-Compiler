@@ -27,7 +27,7 @@
 #include <stdexcept>
 #include <x86-64/compiler.hpp>
 
-#define WITH_LOG 1
+#define WITH_LOG 0
 
 #if WITH_LOG
 #define logf printf
@@ -292,16 +292,8 @@ namespace JIT
     }
 
 
-    bool skip_function(asIScriptFunction* function)
-    {
-        return std::strcmp(function->GetName(), "example") != 0;
-    }
-
     int X86_64_Compiler::CompileFunction(asIScriptFunction* function, asJITFunction* output)
     {
-        if (skip_function(function))
-            return -1;
-
         logf("Begin compile function '%s'\n", function->GetName());
 
         CompileInfo info;
@@ -712,12 +704,6 @@ namespace JIT
     void X86_64_Compiler::exec_asBC_CMPu(CompileInfo* info)
     {}
 
-    void debug(float a, float b)
-    {
-        int i = 0;
-        i++;
-    }
-
     void X86_64_Compiler::exec_asBC_CMPf(CompileInfo* info)
     {
         short offset0 = -(asBC_SWORDARG0(info->l_bc) * sizeof(int));
@@ -726,7 +712,6 @@ namespace JIT
         catch_errors(info->assembler.mov(rcx, qword_ptr(rbp, -PTR_SIZE_2)));
         catch_errors(info->assembler.movss(xmm0, dword_ptr(rcx, offset0)));
         catch_errors(info->assembler.movss(xmm1, dword_ptr(rcx, offset1)));
-        catch_errors(info->assembler.call(debug));
         catch_errors(info->assembler.mov(rbx, dword_ptr(rbp, -PTR_SIZE_1)));
         catch_errors(info->assembler.add(rbx, offsetof(asSVMRegisters, valueRegister)));
 
@@ -1147,10 +1132,28 @@ namespace JIT
         exec_asBC_RET(info);
     }
 
+
     void X86_64_Compiler::exec_asBC_iTOb(CompileInfo* info)
-    {}
+    {
+        short offset0 = -(asBC_SWORDARG0(info->address) * sizeof(int));
+        info->assembler.mov(rax, dword_ptr(rbp, -PTR_SIZE_2));
+        info->assembler.add(rax, offset0);
+
+        for (int i = 0; i < 3; i++)
+        {
+            info->assembler.add(rax, 1);
+            info->assembler.mov(byte_ptr(rax), static_cast<asBYTE>(0));
+        }
+    }
+
     void X86_64_Compiler::exec_asBC_iTOw(CompileInfo* info)
-    {}
+    {
+        short offset0 = -(asBC_SWORDARG0(info->address) * sizeof(int));
+        info->assembler.mov(rax, dword_ptr(rbp, -PTR_SIZE_2));
+        info->assembler.add(rax, offset0 + 2);
+        info->assembler.mov(word_ptr(rax), static_cast<asWORD>(0));
+    }
+
     void X86_64_Compiler::exec_asBC_SetV1(CompileInfo* info)
     {}
     void X86_64_Compiler::exec_asBC_SetV2(CompileInfo* info)
@@ -1161,12 +1164,6 @@ namespace JIT
     {}
     void X86_64_Compiler::exec_asBC_uTOi64(CompileInfo* info)
     {}
-
-
-    void test(asSVMRegisters* r, asDWORD* l_fp)
-    {
-        *(asINT64*) (l_fp - 5) = asINT64(*(int*) (l_fp - 3));
-    }
 
     void X86_64_Compiler::exec_asBC_iTOi64(CompileInfo* info)
     {
@@ -1180,7 +1177,17 @@ namespace JIT
     }
 
     void X86_64_Compiler::exec_asBC_fTOi64(CompileInfo* info)
-    {}
+    {
+        short offset0 = -(asBC_SWORDARG0(info->address) * sizeof(int));
+        short offset1 = -(asBC_SWORDARG1(info->address) * sizeof(int));
+
+        catch_errors(info->assembler.mov(rax, dword_ptr(rbp, -PTR_SIZE_2)));
+        catch_errors(info->assembler.mov(rdx, rax));
+        catch_errors(info->assembler.movss(xmm0, dword_ptr(rax, offset1)));
+        catch_errors(info->assembler.cvttss2si(rax, xmm0));
+        catch_errors(info->assembler.mov(qword_ptr(rdx, offset0), rax));
+    }
+
     void X86_64_Compiler::exec_asBC_dTOi64(CompileInfo* info)
     {}
     void X86_64_Compiler::exec_asBC_fTOu64(CompileInfo* info)
@@ -1195,6 +1202,8 @@ namespace JIT
     {}
     void X86_64_Compiler::exec_asBC_u64TOd(CompileInfo* info)
     {}
+
+
     void X86_64_Compiler::exec_asBC_NEGi64(CompileInfo* info)
     {}
     void X86_64_Compiler::exec_asBC_INCi64(CompileInfo* info)

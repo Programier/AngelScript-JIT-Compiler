@@ -1,4 +1,5 @@
 #include <angelscript.h>
+#include <chrono>
 #include <fstream>
 #include <x86-64/compiler.hpp>
 
@@ -48,7 +49,12 @@ int main(int argc, char** argv)
 
     asIScriptContext* context = engine->CreateContext();
     context->Prepare(module->GetFunctionByName("main"));
+
+    auto begin = std::chrono::steady_clock::now();
     context->Execute();
+    auto end = std::chrono::steady_clock::now();
+
+    printf("Exec time: %zu milliseconds\n", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count());
     context->Release();
     return 0;
 }

@@ -56,6 +56,12 @@ void wrapper(asSVMRegisters* regs, asPWORD arg)
 
 namespace JIT
 {
+    template<typename To, typename From>
+    inline To reinterpret_value(From from)
+    {
+        return *reinterpret_cast<To*>(&from);
+    }
+
     static void on_function_ret(asSVMRegisters* regs, asDWORD* address)
     {
         regs->programPointer = address;
@@ -497,12 +503,6 @@ namespace JIT
         catch_errors(info->assembler.mov(dword_ptr(rax), ebx));
     }
 
-    void test(asSVMRegisters* regs, short offset)
-    {
-        regs->stackPointer -= AS_PTR_SIZE;
-        *(asPWORD*) regs->stackPointer = asPWORD(regs->stackFramePointer - offset);
-    }
-
     void X86_64_Compiler::exec_asBC_PSF(CompileInfo* info)
     {
         short offset = -(asBC_SWORDARG0(info->address) * sizeof(int));
@@ -619,16 +619,42 @@ namespace JIT
     {}
     void X86_64_Compiler::exec_asBC_DECi8(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_INCi(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_DECi(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_INCf(CompileInfo* info)
-    {}
+    {
+        catch_errors(info->assembler.mov(rax, qword_ptr(rbp, -PTR_SIZE_1)));
+        catch_errors(info->assembler.mov(rax, qword_ptr(rax, offsetof(asSVMRegisters, valueRegister))));
+
+        catch_errors(info->assembler.pxor(xmm0, xmm0));
+
+        catch_errors(info->assembler.movss(xmm0, dword_ptr(rax)));
+        catch_errors(info->assembler.mov(dword_ptr(rbp, -PTR_SIZE_3), reinterpret_value<uint32_t>(1.0f)));
+        catch_errors(info->assembler.addss(xmm0, dword_ptr(rbp, -PTR_SIZE_3)));
+        catch_errors(info->assembler.movss(dword_ptr(rax), xmm0));
+    }
+
     void X86_64_Compiler::exec_asBC_DECf(CompileInfo* info)
-    {}
+    {
+        catch_errors(info->assembler.mov(rax, qword_ptr(rbp, -PTR_SIZE_1)));
+        catch_errors(info->assembler.mov(rax, qword_ptr(rax, offsetof(asSVMRegisters, valueRegister))));
+
+        catch_errors(info->assembler.pxor(xmm0, xmm0));
+
+        catch_errors(info->assembler.movss(xmm0, dword_ptr(rax)));
+        catch_errors(info->assembler.mov(dword_ptr(rbp, -PTR_SIZE_3), reinterpret_value<uint32_t>(-1.0f)));
+        catch_errors(info->assembler.addss(xmm0, dword_ptr(rbp, -PTR_SIZE_3)));
+        catch_errors(info->assembler.movss(dword_ptr(rax), xmm0));
+    }
+
     void X86_64_Compiler::exec_asBC_INCd(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_DECd(CompileInfo* info)
     {}
 
@@ -640,7 +666,12 @@ namespace JIT
     }
 
     void X86_64_Compiler::exec_asBC_DecVi(CompileInfo* info)
-    {}
+    {
+        short offset = -(asBC_SWORDARG0(info->address) * sizeof(int));
+        catch_errors(info->assembler.mov(rax, qword_ptr(rbp, -PTR_SIZE_2)));
+        catch_errors(info->assembler.dec(dword_ptr(rax, offset)));
+    }
+
     void X86_64_Compiler::exec_asBC_BNOT(CompileInfo* info)
     {}
     void X86_64_Compiler::exec_asBC_BAND(CompileInfo* info)
@@ -680,8 +711,44 @@ namespace JIT
     {}
     void X86_64_Compiler::exec_asBC_CMPu(CompileInfo* info)
     {}
+
+    void debug(float a, float b)
+    {
+        int i = 0;
+        i++;
+    }
+
     void X86_64_Compiler::exec_asBC_CMPf(CompileInfo* info)
-    {}
+    {
+        short offset0 = -(asBC_SWORDARG0(info->l_bc) * sizeof(int));
+        short offset1 = -(asBC_SWORDARG1(info->l_bc) * sizeof(int));
+
+        catch_errors(info->assembler.mov(rcx, qword_ptr(rbp, -PTR_SIZE_2)));
+        catch_errors(info->assembler.movss(xmm0, dword_ptr(rcx, offset0)));
+        catch_errors(info->assembler.movss(xmm1, dword_ptr(rcx, offset1)));
+        catch_errors(info->assembler.call(debug));
+        catch_errors(info->assembler.mov(rbx, dword_ptr(rbp, -PTR_SIZE_1)));
+        catch_errors(info->assembler.add(rbx, offsetof(asSVMRegisters, valueRegister)));
+
+        asmjit::Label is_less    = info->assembler.newLabel();
+        asmjit::Label is_greater = info->assembler.newLabel();
+        asmjit::Label end        = info->assembler.newLabel();
+
+        catch_errors(info->assembler.comiss(xmm0, xmm1));
+        catch_errors(info->assembler.jnp(is_greater));
+        catch_errors(info->assembler.mov(dword_ptr(rbx), 0));
+        catch_errors(info->assembler.jmp(end));
+
+        catch_errors(info->assembler.bind(is_greater));
+        catch_errors(info->assembler.comiss(xmm0, xmm1));
+        catch_errors(info->assembler.jb(is_less));
+        catch_errors(info->assembler.mov(dword_ptr(rbx), 1));
+        catch_errors(info->assembler.jmp(end));
+
+        catch_errors(info->assembler.bind(is_less));
+        catch_errors(info->assembler.mov(dword_ptr(rbx), -1));
+        catch_errors(info->assembler.bind(end));
+    }
 
     void X86_64_Compiler::exec_asBC_CMPi(CompileInfo* info)
     {
@@ -693,18 +760,18 @@ namespace JIT
         catch_errors(info->assembler.mov(rbx, dword_ptr(rbp, -PTR_SIZE_1)));
         catch_errors(info->assembler.add(rbx, offsetof(asSVMRegisters, valueRegister)));
 
-        asmjit::Label is_less         = info->assembler.newLabel();
-        asmjit::Label is_greater_than = info->assembler.newLabel();
-        asmjit::Label end             = info->assembler.newLabel();
+        asmjit::Label is_less    = info->assembler.newLabel();
+        asmjit::Label is_greater = info->assembler.newLabel();
+        asmjit::Label end        = info->assembler.newLabel();
 
         catch_errors(info->assembler.cmp(eax, dword_ptr(rcx, offset1)));
-        catch_errors(info->assembler.jne(is_greater_than));
+        catch_errors(info->assembler.jne(is_greater));
         catch_errors(info->assembler.mov(dword_ptr(rbx), 0));
         catch_errors(info->assembler.jmp(end));
 
-        catch_errors(info->assembler.bind(is_greater_than));
+        catch_errors(info->assembler.bind(is_greater));
         catch_errors(info->assembler.cmp(eax, dword_ptr(rcx, offset1)));
-        catch_errors(info->assembler.jle(is_less));
+        catch_errors(info->assembler.jl(is_less));
         catch_errors(info->assembler.mov(dword_ptr(rbx), 1));
         catch_errors(info->assembler.jmp(end));
 
@@ -714,7 +781,36 @@ namespace JIT
     }
 
     void X86_64_Compiler::exec_asBC_CMPIi(CompileInfo* info)
-    {}
+    {
+        int value     = asBC_INTARG(info->address);
+        short offset0 = -(asBC_SWORDARG0(info->l_bc) * sizeof(int));
+
+        catch_errors(info->assembler.mov(rcx, qword_ptr(rbp, -PTR_SIZE_2)));
+        catch_errors(info->assembler.mov(rax, dword_ptr(rcx, offset0)));
+        catch_errors(info->assembler.mov(rbx, dword_ptr(rbp, -PTR_SIZE_1)));
+        catch_errors(info->assembler.add(rbx, offsetof(asSVMRegisters, valueRegister)));
+
+        asmjit::Label is_less         = info->assembler.newLabel();
+        asmjit::Label is_greater_than = info->assembler.newLabel();
+        asmjit::Label end             = info->assembler.newLabel();
+
+        catch_errors(info->assembler.cmp(eax, value));
+        catch_errors(info->assembler.jne(is_greater_than));
+        catch_errors(info->assembler.mov(dword_ptr(rbx), 0));
+        catch_errors(info->assembler.jmp(end));
+
+        catch_errors(info->assembler.bind(is_greater_than));
+        catch_errors(info->assembler.cmp(eax, value));
+        catch_errors(info->assembler.jle(is_less));
+        catch_errors(info->assembler.mov(dword_ptr(rbx), 1));
+        catch_errors(info->assembler.jmp(end));
+
+        catch_errors(info->assembler.bind(is_less));
+        catch_errors(info->assembler.mov(dword_ptr(rbx), -1));
+        catch_errors(info->assembler.bind(end));
+    }
+
+
     void X86_64_Compiler::exec_asBC_CMPIf(CompileInfo* info)
     {}
     void X86_64_Compiler::exec_asBC_CMPIu(CompileInfo* info)
@@ -857,8 +953,17 @@ namespace JIT
     {}
     void X86_64_Compiler::exec_asBC_LDG(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_LDV(CompileInfo* info)
-    {}
+    {
+        short offset = -(asBC_SWORDARG0(info->address) * sizeof(int));
+        catch_errors(info->assembler.mov(rax, dword_ptr(rbp, -PTR_SIZE_2)));
+        catch_errors(info->assembler.add(rax, offset));
+
+        catch_errors(info->assembler.mov(rbx, dword_ptr(rbp, -PTR_SIZE_1)));
+        catch_errors(info->assembler.add(rbx, offsetof(asSVMRegisters, valueRegister)));
+        catch_errors(info->assembler.mov(qword_ptr(rbx), rax));
+    }
 
     void X86_64_Compiler::exec_asBC_PGA(CompileInfo* info)
     {
@@ -901,8 +1006,18 @@ namespace JIT
     {}
     void X86_64_Compiler::exec_asBC_uTOd(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_fTOd(CompileInfo* info)
-    {}
+    {
+        short offset0 = -(asBC_SWORDARG0(info->address) * sizeof(int));
+        short offset1 = -(asBC_SWORDARG1(info->address) * sizeof(int));
+
+        catch_errors(info->assembler.mov(rax, qword_ptr(rbp, -PTR_SIZE_2)));
+        catch_errors(info->assembler.mov(qword_ptr(rax, offset0), size_t(4613937818241073152 << 32)));
+        catch_errors(info->assembler.pxor(xmm0, xmm0));
+        catch_errors(info->assembler.cvtss2sd(xmm0, dword_ptr(rax, offset1)));
+        catch_errors(info->assembler.movsd(ptr(rax, offset0), xmm0));
+    }
 
     void X86_64_Compiler::exec_asBC_ADDi(CompileInfo* info)
     {
@@ -1046,8 +1161,24 @@ namespace JIT
     {}
     void X86_64_Compiler::exec_asBC_uTOi64(CompileInfo* info)
     {}
+
+
+    void test(asSVMRegisters* r, asDWORD* l_fp)
+    {
+        *(asINT64*) (l_fp - 5) = asINT64(*(int*) (l_fp - 3));
+    }
+
     void X86_64_Compiler::exec_asBC_iTOi64(CompileInfo* info)
-    {}
+    {
+        short offset0 = -(asBC_SWORDARG0(info->address) * sizeof(int));
+        short offset1 = -(asBC_SWORDARG1(info->address) * sizeof(int));
+
+        catch_errors(info->assembler.mov(rax, dword_ptr(rbp, -PTR_SIZE_2)));
+        catch_errors(info->assembler.mov(rdx, rax));
+        catch_errors(info->assembler.mov(eax, dword_ptr(rax, offset1)));
+        catch_errors(info->assembler.mov(qword_ptr(rdx, offset0), eax));
+    }
+
     void X86_64_Compiler::exec_asBC_fTOi64(CompileInfo* info)
     {}
     void X86_64_Compiler::exec_asBC_dTOi64(CompileInfo* info)
@@ -1117,8 +1248,27 @@ namespace JIT
     {}
     void X86_64_Compiler::exec_asBC_LoadThisR(CompileInfo* info)
     {}
+
+
+    void debug(asSVMRegisters* r, asDWORD* stack_frame_pointer)
+    {
+        *(asQWORD*) r->stackPointer = *(asQWORD*) (stack_frame_pointer - 5);
+    }
+
     void X86_64_Compiler::exec_asBC_PshV8(CompileInfo* info)
-    {}
+    {
+        short offset = -(asBC_SWORDARG0(info->address) * sizeof(int));
+
+        catch_errors(info->assembler.mov(rax, qword_ptr(rbp, -PTR_SIZE_1)));
+        catch_errors(info->assembler.add(rax, offsetof(asSVMRegisters, stackPointer)));
+        catch_errors(info->assembler.sub(qword_ptr(rax), PTR_SIZE_1));
+        catch_errors(info->assembler.mov(rax, qword_ptr(rax)));
+
+        catch_errors(info->assembler.mov(rbx, qword_ptr(rbp, -PTR_SIZE_2)));
+        catch_errors(info->assembler.mov(rbx, qword_ptr(rbx, offset)));
+        catch_errors(info->assembler.mov(qword_ptr(rax), rbx));
+    }
+
     void X86_64_Compiler::exec_asBC_DIVu(CompileInfo* info)
     {}
     void X86_64_Compiler::exec_asBC_MODu(CompileInfo* info)

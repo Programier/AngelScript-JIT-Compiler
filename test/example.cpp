@@ -1,22 +1,14 @@
 
-class Test
+void example(float a, float b)
 {
-    string get_name()
-    {
-        return "Test";
-    }
-};
-
-void example()
-{
-    Test@ test = Test();
-    print(test.get_name());
+    int value = 5;
+    print(formatInt(value));
 }
 
 int main()
 {
 
     //print(test.get_name());
-    example();
+    example(1.f, 2.f);
     return 0;
 }

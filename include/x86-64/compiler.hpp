@@ -82,6 +82,8 @@ namespace JIT
     private:
         asUINT process_instruction(CompileInfo* info);
         void init(CompileInfo* info);
+        void restore_registers(CompileInfo* info);
+
         size_t find_label_for_jump(CompileInfo* info);
         void bind_label_if_required(CompileInfo* info);
 

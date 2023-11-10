@@ -1,14 +1,19 @@
-
-void test_result()
+class Example
 {
-    int64 value = 253;
-    value = -value;
-    print(formatInt(value));
+    string suka()
+    {
+        return "Example";
+    }
+};
+
+
+int factorial(int value)
+{
+    return value < 1 ? 1 : value * factorial(value - 1);
 }
 
 
 int main()
 {
-    test_result();
     return 0;
 }

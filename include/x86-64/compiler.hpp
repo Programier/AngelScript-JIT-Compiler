@@ -44,6 +44,9 @@ namespace JIT
 
         struct CompileInfo {
             Assembler assembler;
+            ConstPool* const_pool;
+            Label* const_pool_label;
+
             std::vector<LabelInfo> labels;
 
             asDWORD* address;
@@ -54,6 +57,15 @@ namespace JIT
             asUINT header_size;
 
             asEBCInstr instruction;
+            asEBCInstr prev_instruction;
+
+            template<typename T>
+            asmjit::x86::Mem insert_constant(T value)
+            {
+                size_t value_offset;
+                const_pool->add(&value, sizeof(value), value_offset);
+                return x86::ptr(*const_pool_label, value_offset);
+            }
         };
 
         JitRuntime _M_rt;

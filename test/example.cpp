@@ -1,22 +1,13 @@
 
-class Example
+float test_result()
 {
-private string msg;
+    int value = 2525;
+    return value;
+}
 
-    Example()
-    {
-        msg = "Help me, PLEEEEASE!!!";
-    }
-
-    string get_msg()
-    {
-        return msg;
-    }
-};
 
 int main()
 {
-    Example@ e = Example();
-    print(e.get_msg());
+    print(formatFloat(test_result()));
     return 0;
 }

@@ -36,6 +36,7 @@
 #define logf
 #endif
 
+#define CONST_POOL_ZONE_SIZE 64
 
 #define PTR_SIZE_1 static_cast<int32_t>(sizeof(void*) * 1)
 #define PTR_SIZE_2 static_cast<int32_t>(sizeof(void*) * 2)
@@ -52,12 +53,20 @@
 #define VALUE_REGISTER (-8 + STACK_POINTER_REGISTER)
 #define OBJECT_REGISTER (-8 + VALUE_REGISTER)
 #define OBJECT_TYPE_REGISTER (-8 + OBJECT_REGISTER)
-#define RESERVED_REGISTER (-8 + OBJECT_TYPE_REGISTER)
-#define LAST_REGISTER RESERVED_REGISTER
+#define LAST_REGISTER OBJECT_TYPE_REGISTER
 
 #define FUNC_DECL
 
-#define arg_value(index) (*(((short*) info->address) + index + 1))
+#define CMP_INSTRUCTIONS_COUNT 7
+
+#define arg_value_dword() asBC_DWORDARG(info->address)
+#define arg_value_int() asBC_INTARG(info->address)
+#define arg_value_qword() asBC_QWORDARG(info->address)
+#define arg_value_float(offset) asBC_FLOATARG(info->address + offset)
+#define arg_value_ptr() asBC_PTRARG(info->address)
+#define arg_value_word(index) (*(((asWORD*) info->address) + index + 1))
+#define arg_value_short(index) (*(((short*) info->address) + index + 1))
+
 #define arg_offset(index) (-(*(((short*) info->address) + index + 1)) * sizeof(asDWORD))
 #define new_instruction(x) catch_errors(info->assembler.x)
 
@@ -69,16 +78,29 @@ namespace JIT
         return std::fmod<float, float>(a, b);
     }
 
+    static float FUNC_DECL mod_double(double a, double b)
+    {
+        return std::fmod<double, double>(a, b);
+    }
 
     static void FUNC_DECL make_exception_nullptr_access()
     {
         throw std::runtime_error("Attempting to access a null pointer");
     }
 
-    template<typename To, typename From>
-    inline To reinterpret_value(From from)
+    static double FUNC_DECL uint_to_double(uint32_t value)
     {
-        return *reinterpret_cast<To*>(&from);
+        return static_cast<double>(value);
+    }
+
+    static uint32_t FUNC_DECL double_to_uint(double value)
+    {
+        return static_cast<uint32_t>(value);
+    }
+
+    static float FUNC_DECL uint_to_float(uint32_t value)
+    {
+        return static_cast<float>(value);
     }
 
     static void catch_errors(asmjit::Error error)
@@ -88,7 +110,6 @@ namespace JIT
             printf("AsmJit failed: %s\n", JIT::DebugUtils::errorAsString(error));
         }
     }
-
 
     X86_64_Compiler::X86_64_Compiler()
     {
@@ -331,14 +352,22 @@ namespace JIT
         new (&info.assembler) Assembler(&code);
 
         init(&info);
-
         info.address = info.begin;
+
+        Zone zone(CONST_POOL_ZONE_SIZE);
+        ConstPool const_pool(&zone);
+
+        Label const_pool_label = info.assembler.newLabel();
+        info.const_pool_label  = &const_pool_label;
+        info.const_pool        = &const_pool;
 
         while (info.address < info.end)
         {
             info.instruction = static_cast<asEBCInstr>(*reinterpret_cast<asBYTE*>(info.address));
             info.address += process_instruction(&info);
         }
+
+        info.assembler.embedConstPool(const_pool_label, const_pool);
 
         info.assembler.finalize();
         _M_rt.add(output, &code);
@@ -391,7 +420,7 @@ namespace JIT
         }
 #endif
 
-
+        info->prev_instruction = info->instruction;
         return instruction_size(info->instruction);
     }
 
@@ -487,6 +516,8 @@ namespace JIT
         return size;
     }
 
+    ///////////////////////////////////// IMPLEMENTATION OF INSTRUCTIONS /////////////////////////////////////
+
     void X86_64_Compiler::exec_asBC_PopPtr(CompileInfo* info)
     {
         new_instruction(add(dword_ptr(rbp, STACK_POINTER_REGISTER), PTR_SIZE_1));
@@ -503,14 +534,14 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_PshC4(CompileInfo* info)
     {
-        new_instruction(sub(dword_ptr(rbp, STACK_POINTER_REGISTER), PTR_SIZE_1));
+        new_instruction(sub(dword_ptr(rbp, STACK_POINTER_REGISTER), PTR_SIZE_1 / 2));
         new_instruction(mov(rax, dword_ptr(rbp, STACK_POINTER_REGISTER)));
         new_instruction(mov(dword_ptr(rax), asBC_DWORDARG(info->address)));
     }
 
     void X86_64_Compiler::exec_asBC_PshV4(CompileInfo* info)
     {
-        new_instruction(sub(dword_ptr(rbp, STACK_POINTER_REGISTER), PTR_SIZE_1));
+        new_instruction(sub(dword_ptr(rbp, STACK_POINTER_REGISTER), PTR_SIZE_1 / 2));
         new_instruction(mov(rax, dword_ptr(rbp, STACK_POINTER_REGISTER)));
 
         short offset = arg_offset(0);
@@ -580,12 +611,15 @@ namespace JIT
     }
 
     void X86_64_Compiler::exec_asBC_JZ(CompileInfo* info)
-    {}
+    {
+        size_t label_index = find_label_for_jump(info);
+        new_instruction(cmp(dword_ptr(rbp, VALUE_REGISTER), 0));
+        new_instruction(je(info->labels[label_index].label));
+    }
 
     void X86_64_Compiler::exec_asBC_JNZ(CompileInfo* info)
     {
         size_t label_index = find_label_for_jump(info);
-
         new_instruction(cmp(dword_ptr(rbp, VALUE_REGISTER), 0));
         new_instruction(jne(info->labels[label_index].label));
     }
@@ -593,7 +627,6 @@ namespace JIT
     void X86_64_Compiler::exec_asBC_JS(CompileInfo* info)
     {
         size_t label_index = find_label_for_jump(info);
-
         new_instruction(cmp(dword_ptr(rbp, VALUE_REGISTER), 0));
         new_instruction(jl(info->labels[label_index].label));
     }
@@ -606,7 +639,11 @@ namespace JIT
     }
 
     void X86_64_Compiler::exec_asBC_JP(CompileInfo* info)
-    {}
+    {
+        size_t label_index = find_label_for_jump(info);
+        new_instruction(cmp(dword_ptr(rbp, VALUE_REGISTER), 0));
+        new_instruction(jg(info->labels[label_index].label));
+    }
 
     void X86_64_Compiler::exec_asBC_JNP(CompileInfo* info)
     {
@@ -617,28 +654,40 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_TZ(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_TNZ(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_TS(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_TNS(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_TP(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_TNP(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_NEGi(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_NEGf(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_NEGd(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_INCi16(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_INCi8(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_DECi16(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_DECi8(CompileInfo* info)
     {}
 
@@ -651,28 +700,38 @@ namespace JIT
     void X86_64_Compiler::exec_asBC_INCf(CompileInfo* info)
     {
         new_instruction(pxor(xmm0, xmm0));
-        new_instruction(mov(rax, dword_ptr(rbp, VALUE_REGISTER)));
-        new_instruction(movss(xmm0, dword_ptr(rax)));
-        new_instruction(mov(dword_ptr(rbp, RESERVED_REGISTER), reinterpret_value<uint32_t>(1.0f)));
-        new_instruction(addss(xmm0, dword_ptr(rbp, RESERVED_REGISTER)));
-        new_instruction(movss(dword_ptr(rax), xmm0));
+        new_instruction(mov(rax, qword_ptr(rbp, VALUE_REGISTER)));
+        new_instruction(movss(xmm0, qword_ptr(rax)));
+        new_instruction(addss(xmm0, info->insert_constant<float>(1.0)));
+        new_instruction(movss(qword_ptr(rax), xmm0));
     }
 
     void X86_64_Compiler::exec_asBC_DECf(CompileInfo* info)
     {
         new_instruction(pxor(xmm0, xmm0));
-        new_instruction(mov(rax, dword_ptr(rbp, VALUE_REGISTER)));
-        new_instruction(movss(xmm0, dword_ptr(rax)));
-        new_instruction(mov(dword_ptr(rbp, RESERVED_REGISTER), reinterpret_value<uint32_t>(1.0f)));
-        new_instruction(subss(xmm0, dword_ptr(rbp, RESERVED_REGISTER)));
-        new_instruction(movss(dword_ptr(rax), xmm0));
+        new_instruction(mov(rax, qword_ptr(rbp, VALUE_REGISTER)));
+        new_instruction(movss(xmm0, qword_ptr(rax)));
+        new_instruction(subss(xmm0, info->insert_constant<float>(1.0)));
+        new_instruction(movss(qword_ptr(rax), xmm0));
     }
 
     void X86_64_Compiler::exec_asBC_INCd(CompileInfo* info)
-    {}
+    {
+        new_instruction(pxor(xmm0, xmm0));
+        new_instruction(mov(rax, qword_ptr(rbp, VALUE_REGISTER)));
+        new_instruction(movsd(xmm0, qword_ptr(rax)));
+        new_instruction(addsd(xmm0, info->insert_constant<double>(1.0)));
+        new_instruction(movsd(qword_ptr(rax), xmm0));
+    }
 
     void X86_64_Compiler::exec_asBC_DECd(CompileInfo* info)
-    {}
+    {
+        new_instruction(pxor(xmm0, xmm0));
+        new_instruction(mov(rax, qword_ptr(rbp, VALUE_REGISTER)));
+        new_instruction(movsd(xmm0, qword_ptr(rax)));
+        new_instruction(subsd(xmm0, info->insert_constant<double>(1.0)));
+        new_instruction(movsd(qword_ptr(rax), xmm0));
+    }
 
     void X86_64_Compiler::exec_asBC_IncVi(CompileInfo* info)
     {
@@ -690,20 +749,28 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_BNOT(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BAND(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BOR(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BXOR(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BSLL(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BSRL(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BSRA(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_COPY(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_PshC8(CompileInfo* info)
     {}
 
@@ -739,6 +806,7 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_CMPd(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_CMPu(CompileInfo* info)
     {}
 
@@ -789,7 +857,6 @@ namespace JIT
         new_instruction(jmp(end));
 
         new_instruction(bind(is_greater));
-        new_instruction(cmp(eax, dword_ptr(rcx, offset1)));
         new_instruction(jl(is_less));
         new_instruction(mov(dword_ptr(rbp, VALUE_REGISTER), 1));
         new_instruction(jmp(end));
@@ -817,7 +884,6 @@ namespace JIT
         new_instruction(jmp(end));
 
         new_instruction(bind(is_greater_than));
-        new_instruction(cmp(eax, value));
         new_instruction(jle(is_less));
         new_instruction(mov(dword_ptr(rbp, VALUE_REGISTER), 1));
         new_instruction(jmp(end));
@@ -833,12 +899,16 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_CMPIu(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_JMPP(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_PopRPtr(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_PshRPtr(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_STR(CompileInfo* info)
     {}
 
@@ -850,6 +920,7 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_CALLBND(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_SUSPEND(CompileInfo* info)
     {}
 
@@ -890,18 +961,25 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_REFCPY(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_CHKREF(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_GETOBJREF(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_GETREF(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_PshNull(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_ClrVPtr(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_OBJTYPE(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_TYPEID(CompileInfo* info)
     {}
 
@@ -914,7 +992,14 @@ namespace JIT
     }
 
     void X86_64_Compiler::exec_asBC_SetV8(CompileInfo* info)
-    {}
+    {
+        asQWORD value = arg_value_qword();
+        short offset  = arg_offset(0);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(mov(rbx, value));
+        new_instruction(mov(dword_ptr(rax, offset), rbx));
+    }
 
 
     void X86_64_Compiler::exec_asBC_ADDSi(CompileInfo* info)
@@ -945,7 +1030,14 @@ namespace JIT
     }
 
     void X86_64_Compiler::exec_asBC_CpyVtoV8(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(mov(rbx, dword_ptr(rax, offset1)));
+        new_instruction(mov(dword_ptr(rax, offset0), rbx));
+    }
 
     void X86_64_Compiler::exec_asBC_CpyVtoR4(CompileInfo* info)
     {
@@ -977,12 +1069,19 @@ namespace JIT
     }
 
     void X86_64_Compiler::exec_asBC_CpyRtoV8(CompileInfo* info)
-    {}
+    {
+        short offset = arg_offset(0);
+        new_instruction(mov(rax, dword_ptr(rbp, VALUE_REGISTER)));
+        new_instruction(mov(rbx, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(mov(dword_ptr(rbx, offset), rax));
+    }
 
     void X86_64_Compiler::exec_asBC_CpyGtoV4(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_WRTV1(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_WRTV2(CompileInfo* info)
     {}
 
@@ -998,8 +1097,10 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_WRTV8(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_RDR1(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_RDR2(CompileInfo* info)
     {}
 
@@ -1013,7 +1114,14 @@ namespace JIT
     }
 
     void X86_64_Compiler::exec_asBC_RDR8(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        new_instruction(mov(rax, qword_ptr(rbp, VALUE_REGISTER)));
+        new_instruction(mov(rax, qword_ptr(rax)));
+        new_instruction(mov(rbx, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(mov(qword_ptr(rbx, offset0), rax));
+    }
+
     void X86_64_Compiler::exec_asBC_LDG(CompileInfo* info)
     {}
 
@@ -1035,47 +1143,150 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_CmpPtr(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_VAR(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_iTOf(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(pxor(xmm0, xmm0));
+        new_instruction(cvtsi2ss(xmm0, dword_ptr(rax, offset0)));
+        new_instruction(movss(qword_ptr(rax, offset0), xmm0));
+    }
+
     void X86_64_Compiler::exec_asBC_fTOi(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(cvttss2si(ebx, dword_ptr(rax, offset0)));
+        new_instruction(mov(dword_ptr(rax, offset0), ebx));
+    }
+
     void X86_64_Compiler::exec_asBC_uTOf(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(mov(edi, dword_ptr(rax, offset0)));
+        new_instruction(call(uint_to_float));
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movss(dword_ptr(rax, offset0), xmm0));
+    }
+
     void X86_64_Compiler::exec_asBC_fTOu(CompileInfo* info)
-    {}
+    {
+        short offset = arg_offset(0);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(cvttss2si(rbx, dword_ptr(rax, offset)));
+        new_instruction(mov(dword_ptr(rax, offset), rbx));
+    }
+
     void X86_64_Compiler::exec_asBC_sbTOi(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movsx(ebx, byte_ptr(rax, offset0)));
+        new_instruction(mov(dword_ptr(rax, offset0), ebx));
+    }
+
     void X86_64_Compiler::exec_asBC_swTOi(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movsx(ebx, word_ptr(rax, offset0)));
+        new_instruction(mov(dword_ptr(rax, offset0), ebx));
+    }
+
     void X86_64_Compiler::exec_asBC_ubTOi(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movzx(ebx, byte_ptr(rax, offset0)));
+        new_instruction(mov(dword_ptr(rax, offset0), ebx));
+    }
+
     void X86_64_Compiler::exec_asBC_uwTOi(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movzx(ebx, word_ptr(rax, offset0)));
+        new_instruction(mov(dword_ptr(rax, offset0), ebx));
+    }
+
     void X86_64_Compiler::exec_asBC_dTOi(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(pxor(xmm0, xmm0));
+        new_instruction(cvttsd2si(ebx, dword_ptr(rax, offset1)));
+        new_instruction(mov(dword_ptr(rax, offset0), ebx));
+    }
+
     void X86_64_Compiler::exec_asBC_dTOu(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(pxor(xmm0, xmm0));
+        new_instruction(cvttsd2si(rbx, dword_ptr(rax, offset1)));
+        new_instruction(mov(dword_ptr(rax, offset0), ebx));
+    }
+
     void X86_64_Compiler::exec_asBC_dTOf(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(pxor(xmm0, xmm0));
+        new_instruction(cvtsd2ss(xmm0, dword_ptr(rax, offset1)));
+        new_instruction(movss(qword_ptr(rax, offset0), xmm0));
+    }
+
     void X86_64_Compiler::exec_asBC_iTOd(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(pxor(xmm0, xmm0));
+        new_instruction(cvtsi2sd(xmm0, dword_ptr(rax, offset1)));
+        new_instruction(movsd(qword_ptr(rax, offset0), xmm0));
+    }
+
     void X86_64_Compiler::exec_asBC_uTOd(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(mov(edi, dword_ptr(rax, offset1)));
+        new_instruction(call(uint_to_double));
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movsd(dword_ptr(rax, offset0), xmm0));
+    }
 
     void X86_64_Compiler::exec_asBC_fTOd(CompileInfo* info)
     {
-        // FIX IT
-        return exec_asBC_RET(info);
-        short offset0 = -(asBC_SWORDARG0(info->address) * sizeof(int));
-        short offset1 = -(asBC_SWORDARG1(info->address) * sizeof(int));
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
 
-        new_instruction(mov(rax, qword_ptr(rbp, -PTR_SIZE_2)));
-        new_instruction(mov(qword_ptr(rax, offset0), size_t(4613937818241073152 << 32)));
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
         new_instruction(pxor(xmm0, xmm0));
         new_instruction(cvtss2sd(xmm0, dword_ptr(rax, offset1)));
-        new_instruction(movsd(ptr(rax, offset0), xmm0));
+        new_instruction(movsd(qword_ptr(rax, offset0), xmm0));
     }
 
     void X86_64_Compiler::exec_asBC_ADDi(CompileInfo* info)
@@ -1207,15 +1418,66 @@ namespace JIT
     }
 
     void X86_64_Compiler::exec_asBC_ADDd(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
+
+        new_instruction(mov(rax, qword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movsd(xmm0, dword_ptr(rax, offset1)));
+        new_instruction(addsd(xmm0, dword_ptr(rax, offset2)));
+        new_instruction(movsd(dword_ptr(rax, offset0), xmm0));
+    }
+
     void X86_64_Compiler::exec_asBC_SUBd(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
+
+        new_instruction(mov(rax, qword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movsd(xmm0, dword_ptr(rax, offset1)));
+        new_instruction(subsd(xmm0, dword_ptr(rax, offset2)));
+        new_instruction(movsd(dword_ptr(rax, offset0), xmm0));
+    }
+
     void X86_64_Compiler::exec_asBC_MULd(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
+
+        new_instruction(mov(rax, qword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movsd(xmm0, dword_ptr(rax, offset1)));
+        new_instruction(mulsd(xmm0, dword_ptr(rax, offset2)));
+        new_instruction(movsd(dword_ptr(rax, offset0), xmm0));
+    }
+
     void X86_64_Compiler::exec_asBC_DIVd(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
+
+        new_instruction(mov(rax, qword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movsd(xmm0, dword_ptr(rax, offset1)));
+        new_instruction(divsd(xmm0, dword_ptr(rax, offset2)));
+        new_instruction(movsd(dword_ptr(rax, offset0), xmm0));
+    }
+
     void X86_64_Compiler::exec_asBC_MODd(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
+
+        new_instruction(mov(rax, qword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movsd(xmm0, dword_ptr(rax, offset1)));
+        new_instruction(movsd(xmm1, dword_ptr(rax, offset2)));
+        new_instruction(call(mod_double));
+        new_instruction(mov(rax, qword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movsd(dword_ptr(rax, offset0), xmm0));
+    }
 
     void X86_64_Compiler::exec_asBC_ADDIi(CompileInfo* info)
     {
@@ -1257,48 +1519,44 @@ namespace JIT
     {
         short offset0 = arg_offset(0);
         short offset1 = arg_offset(1);
-        asDWORD value = reinterpret_value<asDWORD>(asBC_FLOATARG(info->address + 1));
+        float value   = arg_value_float(1);
 
-        new_instruction(mov(rcx, qword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
-        new_instruction(movss(xmm0, dword_ptr(rcx, offset1)));
-        new_instruction(
-                mov(dword_ptr(rbp, RESERVED_REGISTER), value));// TODO: Maybe it is possible to remove this instruction?
-        new_instruction(addss(xmm0, dword_ptr(rbp, RESERVED_REGISTER)));
-        new_instruction(movss(dword_ptr(rcx, offset0), xmm0));
+        new_instruction(mov(rax, qword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movss(xmm0, dword_ptr(rax, offset1)));
+        new_instruction(addss(xmm0, info->insert_constant(value)));
+        new_instruction(movss(dword_ptr(rax, offset0), xmm0));
     }
 
     void X86_64_Compiler::exec_asBC_SUBIf(CompileInfo* info)
     {
         short offset0 = arg_offset(0);
         short offset1 = arg_offset(1);
-        asDWORD value = reinterpret_value<asDWORD>(asBC_FLOATARG(info->address + 1));
+        float value   = arg_value_float(1);
 
-        new_instruction(mov(rcx, qword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
-        new_instruction(movss(xmm0, dword_ptr(rcx, offset1)));
-        new_instruction(
-                mov(dword_ptr(rbp, RESERVED_REGISTER), value));// TODO: Maybe it is possible to remove this instruction?
-        new_instruction(subss(xmm0, dword_ptr(rbp, RESERVED_REGISTER)));
-        new_instruction(movss(dword_ptr(rcx, offset0), xmm0));
+        new_instruction(mov(rax, qword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movss(xmm0, dword_ptr(rax, offset1)));
+        new_instruction(subss(xmm0, info->insert_constant(value)));
+        new_instruction(movss(dword_ptr(rax, offset0), xmm0));
     }
 
     void X86_64_Compiler::exec_asBC_MULIf(CompileInfo* info)
     {
         short offset0 = arg_offset(0);
         short offset1 = arg_offset(1);
-        asDWORD value = reinterpret_value<asDWORD>(asBC_FLOATARG(info->address + 1));
+        float value   = arg_value_float(1);
 
-        new_instruction(mov(rcx, qword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
-        new_instruction(movss(xmm0, dword_ptr(rcx, offset1)));
-        new_instruction(
-                mov(dword_ptr(rbp, RESERVED_REGISTER), value));// TODO: Maybe it is possible to remove this instruction?
-        new_instruction(mulss(xmm0, dword_ptr(rbp, RESERVED_REGISTER)));
-        new_instruction(movss(dword_ptr(rcx, offset0), xmm0));
+        new_instruction(mov(rax, qword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(movss(xmm0, dword_ptr(rax, offset1)));
+        new_instruction(mulss(xmm0, info->insert_constant(value)));
+        new_instruction(movss(dword_ptr(rax, offset0), xmm0));
     }
 
     void X86_64_Compiler::exec_asBC_SetG4(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_ChkRefS(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_ChkNullV(CompileInfo* info)
     {}
 
@@ -1330,15 +1588,45 @@ namespace JIT
     }
 
     void X86_64_Compiler::exec_asBC_SetV1(CompileInfo* info)
-    {}
+    {
+        short value   = arg_value_dword();
+        short offset0 = arg_offset(0);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(mov(dword_ptr(rax, offset0), value));
+    }
+
     void X86_64_Compiler::exec_asBC_SetV2(CompileInfo* info)
-    {}
+    {
+        short value   = arg_value_dword();
+        short offset0 = arg_offset(0);
+
+        new_instruction(mov(rax, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(mov(dword_ptr(rax, offset0), value));
+    }
+
     void X86_64_Compiler::exec_asBC_Cast(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_i64TOi(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+
+        new_instruction(mov(rdx, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(mov(rax, dword_ptr(rdx, offset1)));
+        new_instruction(mov(qword_ptr(rdx, offset0), eax));
+    }
+
     void X86_64_Compiler::exec_asBC_uTOi64(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+
+        new_instruction(mov(rdx, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
+        new_instruction(mov(eax, dword_ptr(rdx, offset1)));
+        new_instruction(mov(qword_ptr(rdx, offset0), rax));
+    }
 
     void X86_64_Compiler::exec_asBC_iTOi64(CompileInfo* info)
     {
@@ -1347,7 +1635,8 @@ namespace JIT
 
         new_instruction(mov(rdx, dword_ptr(rbp, STACK_FRAME_POINTER_REGISTER)));
         new_instruction(mov(eax, dword_ptr(rdx, offset1)));
-        new_instruction(mov(qword_ptr(rdx, offset0), eax));
+        new_instruction(cdqe());
+        new_instruction(mov(qword_ptr(rdx, offset0), rax));
     }
 
     void X86_64_Compiler::exec_asBC_fTOi64(CompileInfo* info)
@@ -1363,25 +1652,34 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_dTOi64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_fTOu64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_dTOu64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_i64TOf(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_u64TOf(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_i64TOd(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_u64TOd(CompileInfo* info)
     {}
 
     void X86_64_Compiler::exec_asBC_NEGi64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_INCi64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_DECi64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BNOT64(CompileInfo* info)
     {}
 
@@ -1390,30 +1688,43 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_SUBi64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_MULi64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_DIVi64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_MODi64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BAND64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BOR64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BXOR64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BSLL64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BSRL64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_BSRA64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_CMPi64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_CMPu64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_ChkNullS(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_ClrHi(CompileInfo* info)
     {}
 
@@ -1425,12 +1736,13 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_CallPtr(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_FuncPtr(CompileInfo* info)
     {}
 
     void X86_64_Compiler::exec_asBC_LoadThisR(CompileInfo* info)
     {
-        short value0 = arg_value(0);
+        short value0 = arg_value_short(0);
 
         Label is_valid = info->assembler.newLabel();
 
@@ -1460,17 +1772,20 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_DIVu(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_MODu(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_DIVu64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_MODu64(CompileInfo* info)
     {}
 
     void X86_64_Compiler::exec_asBC_LoadRObjR(CompileInfo* info)
     {
         short offset0 = arg_offset(0);
-        short offset1 = arg_value(1);
+        short offset1 = arg_value_short(1);
 
         Label is_valid = info->assembler.newLabel();
 
@@ -1490,32 +1805,46 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_LoadVObjR(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_RefCpyV(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_JLowZ(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_JLowNZ(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_AllocMem(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_SetListSize(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_PshListElmnt(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_SetListType(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_POWi(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_POWu(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_POWf(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_POWd(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_POWdi(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_POWi64(CompileInfo* info)
     {}
+
     void X86_64_Compiler::exec_asBC_POWu64(CompileInfo* info)
     {}
 
@@ -1523,6 +1852,4 @@ namespace JIT
     {
         return exec_asBC_RET(info);
     }
-
-
 }// namespace JIT

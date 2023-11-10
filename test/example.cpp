@@ -1,13 +1,14 @@
 
-float test_result()
+void test_result()
 {
-    int value = 2525;
-    return value;
+    int64 value = 253;
+    value = -value;
+    print(formatInt(value));
 }
 
 
 int main()
 {
-    print(formatFloat(test_result()));
+    test_result();
     return 0;
 }

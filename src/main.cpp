@@ -15,7 +15,8 @@ void message_callback(const asSMessageInfo* msg, void* param)
     printf("Script message: %s\n", msg->message);
 }
 
-int main(int argc, char** argv)
+
+int main(int argc, char** argv) try
 {
     if (argc == 1)
     {
@@ -57,4 +58,9 @@ int main(int argc, char** argv)
     printf("Exec time: %zu milliseconds\n", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count());
     context->Release();
     return 0;
+}
+catch(const std::exception& e)
+{
+    printf("Exception: %s\n", e.what());
+    return -1;
 }

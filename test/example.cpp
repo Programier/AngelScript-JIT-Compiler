@@ -1,12 +1,22 @@
 
-int main()
+class Example
 {
-    int j = 0;
-    for(int i = 0; i < 1000000000; i++)
+private string msg;
+
+    Example()
     {
-        ++j;
+        msg = "Help me, PLEEEEASE!!!";
     }
 
-    print(formatInt(j));
+    string get_msg()
+    {
+        return msg;
+    }
+};
+
+int main()
+{
+    Example@ e = Example();
+    print(e.get_msg());
     return 0;
 }

@@ -21,7 +21,6 @@
 // SOFTWARE.
 
 
-
 #pragma once
 #include <angelscript.h>
 #include <asmjit/asmjit.h>
@@ -47,11 +46,7 @@ namespace JIT
             Assembler assembler;
             std::vector<LabelInfo> labels;
 
-            union
-            {
-                asDWORD* address;
-                asDWORD* l_bc;
-            };
+            asDWORD* address;
             asDWORD* begin;
             asDWORD* end;
 
@@ -281,12 +276,6 @@ namespace JIT
         void exec_asBC_POWi64(CompileInfo* info);
         void exec_asBC_POWu64(CompileInfo* info);
         void exec_asBC_Thiscall1(CompileInfo* info);
-
-        void exec_operator_i32(CompileInfo* info, const std::function<void(CompileInfo*)>& callback);
-        void exec_operator_i_i32(CompileInfo* info, const std::function<void(CompileInfo*)>& callback);
-
-        void exec_operator_f32(CompileInfo* info, const std::function<void(CompileInfo*)>& callback);
-        void exec_operator_i_f32(CompileInfo* info, const std::function<void(CompileInfo*)>& callback);
     };
 
 }// namespace JIT

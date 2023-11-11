@@ -1,31 +1,11 @@
 
-
-class User
+double factorial(double value)
 {
-private string name;
-
-    User(const string& in username = "Test")
-    {
-        name = username;
-    }
-
-    void set_username(const string& in new_name)
-    {
-        name = new_name;
-    }
-
-    string get_username() const
-    {
-        return name;
-    }
-};
-
+    return value < 1 ? 1 : value * factorial(value - 1);
+}
 
 int main()
 {
-    User@ user;
-
-    filesystem fs;
-    print(fs.getCurrentPath());
+    print(formatFloat(factorial(5)));
     return 0;
 }

@@ -1087,7 +1087,8 @@ namespace JIT
     void X86_64_Compiler::exec_asBC_PshC8(CompileInfo* info)
     {
         new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        new_instruction(mov(qword_ptr(vm_stack_pointer), arg_value_qword()));
+        new_instruction(mov(qword_free_1, arg_value_qword()));
+        new_instruction(mov(qword_ptr(vm_stack_pointer), qword_free_1));
     }
 
     void X86_64_Compiler::exec_asBC_PshVPtr(CompileInfo* info)
@@ -2083,19 +2084,62 @@ namespace JIT
     }
 
     void X86_64_Compiler::exec_asBC_ADDi64(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
+
+        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(add(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+    }
 
     void X86_64_Compiler::exec_asBC_SUBi64(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
+
+        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(sub(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+    }
 
     void X86_64_Compiler::exec_asBC_MULi64(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
+
+        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(imul(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+    }
 
     void X86_64_Compiler::exec_asBC_DIVi64(CompileInfo* info)
-    {}
+    {
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
+
+        new_instruction(mov(qword_div_first_arg, qword_ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(cdq());
+        new_instruction(idiv(qword_ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_div_first_arg));
+    }
 
     void X86_64_Compiler::exec_asBC_MODi64(CompileInfo* info)
-    {}
+    {
+
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
+
+        new_instruction(mov(qword_div_first_arg, qword_ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(cdq());
+        new_instruction(idiv(qword_ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_div_mod_result));
+    }
 
     void X86_64_Compiler::exec_asBC_BAND64(CompileInfo* info)
     {}

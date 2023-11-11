@@ -16,12 +16,13 @@ void message_callback(const asSMessageInfo* msg, void* param)
 }
 
 
-int main(int argc, char** argv) try
+int main(int argc, char** argv)
+try
 {
-    if (argc == 1)
+    if(argc == 1)
     {
-        printf("Usage: ./programm filename\n");
-        return 0;
+        printf("Usage: ./program <file>\n");
+        return -1;
     }
 
     std::ifstream file(argv[1]);
@@ -30,6 +31,8 @@ int main(int argc, char** argv) try
         printf("Cannot open file '%s'\n", argv[1]);
         return -1;
     }
+
+
 
     std::string code((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
@@ -59,7 +62,7 @@ int main(int argc, char** argv) try
     context->Release();
     return 0;
 }
-catch(const std::exception& e)
+catch (const std::exception& e)
 {
     printf("Exception: %s\n", e.what());
     return -1;

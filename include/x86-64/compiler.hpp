@@ -57,7 +57,6 @@ namespace JIT
             asUINT header_size;
 
             asEBCInstr instruction;
-            asEBCInstr prev_instruction;
 
             template<typename T>
             asmjit::x86::Mem insert_constant(T value)
@@ -69,12 +68,13 @@ namespace JIT
         };
 
         JitRuntime _M_rt;
-
         void (X86_64_Compiler::*exec[static_cast<size_t>(asBC_MAXBYTECODE)])(CompileInfo*);
         const char* code_names[static_cast<size_t>(asBC_MAXBYTECODE)];
 
+        bool _M_with_suspend;
+
     public:
-        X86_64_Compiler();
+        X86_64_Compiler(bool with_suspend = false);
 
         int CompileFunction(asIScriptFunction* function, asJITFunction* output) override;
         void ReleaseJITFunction(asJITFunction func) override;
@@ -83,6 +83,7 @@ namespace JIT
         asUINT process_instruction(CompileInfo* info);
         void init(CompileInfo* info);
         void restore_registers(CompileInfo* info);
+        void save_registers(CompileInfo* info);
 
         size_t find_label_for_jump(CompileInfo* info);
         void bind_label_if_required(CompileInfo* info);

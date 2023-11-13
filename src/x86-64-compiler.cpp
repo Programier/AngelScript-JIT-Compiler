@@ -101,12 +101,12 @@ namespace JIT
     static constexpr inline Gpq qword_div_first_arg MAYBE_UNUSED  = rax;
     static constexpr inline Gpq qword_div_mod_result MAYBE_UNUSED = rdx;
 
-    static constexpr inline Gpd dword_firts_arg MAYBE_UNUSED  = edi;
-    static constexpr inline Gpd dword_second_arg MAYBE_UNUSED = esi;
-    static constexpr inline Gpd dword_third_arg MAYBE_UNUSED  = edx;
     static constexpr inline Gpq qword_first_arg MAYBE_UNUSED  = rdi;
     static constexpr inline Gpq qword_second_arg MAYBE_UNUSED = rsi;
     static constexpr inline Gpq qword_third_arg MAYBE_UNUSED  = rdx;
+    static constexpr inline Gpd dword_firts_arg MAYBE_UNUSED  = edi;
+    static constexpr inline Gpd dword_second_arg MAYBE_UNUSED = esi;
+    static constexpr inline Gpd dword_third_arg MAYBE_UNUSED  = edx;
 
     static constexpr inline Xmm float_firts_arg MAYBE_UNUSED   = xmm0;
     static constexpr inline Xmm float_second_arg MAYBE_UNUSED  = xmm1;
@@ -133,19 +133,37 @@ namespace JIT
 
 
 #elif PLATFORM_WINDOWS
+
     static constexpr inline Gpq qword_free_1 MAYBE_UNUSED = rax;
     static constexpr inline Gpq qword_free_2 MAYBE_UNUSED = rbx;
+    static constexpr inline Gpq qword_free_3 MAYBE_UNUSED = r14;
 
     static constexpr inline Gpd dword_free_1 MAYBE_UNUSED = eax;
     static constexpr inline Gpd dword_free_2 MAYBE_UNUSED = ebx;
+    static constexpr inline Gpd dword_free_3 MAYBE_UNUSED = r14d;
+
+    static constexpr inline Gpw word_free_1 MAYBE_UNUSED = ax;
+    static constexpr inline Gpw word_free_2 MAYBE_UNUSED = bx;
+    static constexpr inline Gpw word_free_3 MAYBE_UNUSED = r14w;
+
+    static constexpr inline Gpb byte_free_1 MAYBE_UNUSED = al;
+    static constexpr inline Gpb byte_free_2 MAYBE_UNUSED = bl;
+    static constexpr inline Gpb byte_free_3 MAYBE_UNUSED = r14b;
 
     static constexpr inline Xmm xmm_free_1 MAYBE_UNUSED = xmm0;
     static constexpr inline Xmm xmm_free_2 MAYBE_UNUSED = xmm1;
 
-    static constexpr inline Gpd dword_firts_arg MAYBE_UNUSED  = ecx;
-    static constexpr inline Gpd dword_second_arg MAYBE_UNUSED = edx;
+    static constexpr inline Gpd dword_div_first_arg MAYBE_UNUSED  = eax;
+    static constexpr inline Gpd dword_div_mod_result MAYBE_UNUSED = edx;
+    static constexpr inline Gpq qword_div_first_arg MAYBE_UNUSED  = rax;
+    static constexpr inline Gpq qword_div_mod_result MAYBE_UNUSED = rdx;
+
     static constexpr inline Gpq qword_first_arg MAYBE_UNUSED  = rcx;
     static constexpr inline Gpq qword_second_arg MAYBE_UNUSED = rdx;
+    static constexpr inline Gpq qword_third_arg MAYBE_UNUSED  = r8;
+    static constexpr inline Gpd dword_firts_arg MAYBE_UNUSED  = ecx;
+    static constexpr inline Gpd dword_second_arg MAYBE_UNUSED = edx;
+    static constexpr inline Gpd dword_third_arg MAYBE_UNUSED  = r8d;
 
     static constexpr inline Xmm float_firts_arg MAYBE_UNUSED   = xmm0;
     static constexpr inline Xmm float_second_arg MAYBE_UNUSED  = xmm1;
@@ -157,11 +175,11 @@ namespace JIT
     static constexpr inline Xmm float_return MAYBE_UNUSED  = xmm0;
     static constexpr inline Xmm double_return MAYBE_UNUSED = xmm0;
 
-    static constexpr inline Gpb shift_second_arg MAYBE_UNUSED = cl;
+    static constexpr inline Gpb shift_second_arg = cl;
 
-    static constexpr inline Gpq restore_register MAYBE_UNUSED = r13;
+    static constexpr inline Gpq restore_register = r13;
 
-    static constexpr inline Gpq vm_frame_stack_pointer MAYBE_UNUSED = r8;
+    static constexpr inline Gpq vm_stack_frame_pointer MAYBE_UNUSED = r8;
     static constexpr inline Gpq vm_stack_pointer MAYBE_UNUSED       = r9;
     static constexpr inline Gpq vm_value_q MAYBE_UNUSED             = r10;
     static constexpr inline Gpd vm_value_d MAYBE_UNUSED             = r10d;
@@ -579,7 +597,7 @@ namespace JIT
 
                 for (decltype(size) i = 1; i < size; i++)
                 {
-                    logf("%u%s", info->address[i], (i == size - 1 ? "" : ", "));
+                    logf("%u%s", static_cast<unsigned int>(info->address[i]), (i == size - 1 ? "" : ", "));
                 }
                 printf("]\n");
             }
@@ -589,12 +607,12 @@ namespace JIT
         return instruction_size(info->instruction);
     }
 
+
     void X86_64_Compiler::init(CompileInfo* info)
     {
         new_instruction(push(rbp));
         new_instruction(mov(rbp, rsp));
         new_instruction(sub(rsp, -vm_register_offset));
-
 
         new_instruction(mov(qword_ptr(rbp, vm_register_offset), qword_first_arg));
         restore_registers(info);
@@ -602,7 +620,7 @@ namespace JIT
         // Restore position of execution
         new_instruction(lea(qword_free_1, qword_ptr(rip)));
         info->header_size = info->assembler.offset();
-        new_instruction(add(qword_free_1, rsi));
+        new_instruction(add(qword_free_1, qword_second_arg));
         new_instruction(jmp(qword_free_1));
 
         asDWORD* start = info->begin;
@@ -639,7 +657,7 @@ namespace JIT
 
     void X86_64_Compiler::restore_registers(CompileInfo* info)
     {
-        new_instruction(mov(restore_register, dword_ptr(rbp, vm_register_offset)));
+        new_instruction(mov(restore_register, qword_ptr(rbp, vm_register_offset)));
 
         new_instruction(
                 mov(vm_stack_frame_pointer, qword_ptr(restore_register, offsetof(asSVMRegisters, stackFramePointer))));
@@ -649,10 +667,14 @@ namespace JIT
         new_instruction(mov(vm_object_type, qword_ptr(restore_register, offsetof(asSVMRegisters, objectType))));
     }
 
-    void X86_64_Compiler::save_registers(CompileInfo* info)
+    void X86_64_Compiler::save_registers(CompileInfo* info, bool ret)
     {
-        new_instruction(mov(restore_register, dword_ptr(rbp, vm_register_offset)));
-        new_instruction(mov(qword_ptr(restore_register, offsetof(asSVMRegisters, programPointer)), info->address));
+        new_instruction(mov(restore_register, qword_ptr(rbp, vm_register_offset)));
+        if (ret)
+        {
+            new_instruction(movabs(qword_free_1, info->address));
+            new_instruction(mov(qword_ptr(restore_register, offsetof(asSVMRegisters, programPointer)), qword_free_1));
+        }
 
         new_instruction(
                 mov(qword_ptr(restore_register, offsetof(asSVMRegisters, stackFramePointer)), vm_stack_frame_pointer));
@@ -706,13 +728,14 @@ namespace JIT
         asPWORD value = *(asPWORD*) asBC_PTRARG(info->address);
 
         new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        new_instruction(mov(dword_ptr(vm_stack_pointer), value));
+        new_instruction(movabs(qword_free_1, value));
+        new_instruction(mov(dword_ptr(vm_stack_pointer), qword_free_1));
     }
 
     void X86_64_Compiler::exec_asBC_PshC4(CompileInfo* info)
     {
         new_instruction(sub(vm_stack_pointer, half_ptr_size));
-        new_instruction(mov(dword_ptr(vm_stack_pointer), asBC_DWORDARG(info->address)));
+        new_instruction(mov(dword_ptr(vm_stack_pointer), arg_value_dword(0)));
     }
 
     void X86_64_Compiler::exec_asBC_PshV4(CompileInfo* info)
@@ -766,7 +789,8 @@ namespace JIT
         asDWORD value = *(asDWORD*) arg_value_ptr();
 
         new_instruction(sub(vm_stack_pointer, half_ptr_size));
-        new_instruction(mov(dword_ptr(vm_stack_pointer), value));
+        new_instruction(mov(qword_free_1, value));
+        new_instruction(mov(dword_ptr(vm_stack_pointer), qword_free_1));
     }
 
     void X86_64_Compiler::exec_asBC_LdGRdR4(CompileInfo* info)
@@ -785,7 +809,7 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_RET(CompileInfo* info)
     {
-        save_registers(info);
+        save_registers(info, true);
         new_instruction(nop());
         new_instruction(leave());
         new_instruction(ret());
@@ -1497,7 +1521,8 @@ namespace JIT
     {
         asPWORD ptr = arg_value_ptr();
         new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        new_instruction(mov(qword_ptr(vm_stack_pointer), ptr));
+        new_instruction(movabs(qword_free_1, ptr));
+        new_instruction(mov(qword_ptr(vm_stack_pointer), qword_free_1));
     }
 
     void X86_64_Compiler::exec_asBC_TYPEID(CompileInfo* info)
@@ -1573,7 +1598,8 @@ namespace JIT
         short offset = arg_offset(0);
 
         new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset)));
-        new_instruction(mov(dword_ptr(ptr), dword_free_1));
+        new_instruction(movabs(qword_free_2, ptr));
+        new_instruction(mov(dword_ptr(qword_free_2), dword_free_1));
     }
 
     void X86_64_Compiler::exec_asBC_CpyRtoV4(CompileInfo* info)
@@ -1592,7 +1618,8 @@ namespace JIT
     {
         asPWORD ptr  = arg_value_ptr();
         short offset = arg_offset(0);
-        new_instruction(mov(dword_free_1, dword_ptr(ptr)));
+        new_instruction(movabs(qword_free_1, ptr));
+        new_instruction(mov(dword_free_1, dword_ptr(qword_free_1)));
         new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset), dword_free_1));
     }
 
@@ -1669,9 +1696,10 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_PGA(CompileInfo* info)
     {
-        asPWORD value = asBC_PTRARG(info->address);
+        asPWORD value = arg_value_ptr();
         new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        new_instruction(mov(qword_ptr(vm_stack_pointer), value));
+        new_instruction(movabs(qword_free_1, value));
+        new_instruction(mov(qword_ptr(vm_stack_pointer), qword_free_1));
     }
 
     void X86_64_Compiler::exec_asBC_CmpPtr(CompileInfo* info)
@@ -1683,7 +1711,7 @@ namespace JIT
     {
         asPWORD value = static_cast<asPWORD>(arg_value_short(0));
         new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        new_instruction(mov(qword_free_1, value));
+        new_instruction(movabs(qword_free_1, value));
         new_instruction(mov(qword_ptr(vm_stack_pointer), qword_free_1));
     }
 
@@ -2059,7 +2087,8 @@ namespace JIT
     {
         asPWORD ptr   = arg_value_ptr();
         asDWORD value = asBC_DWORDARG(info->address + AS_PTR_SIZE);
-        new_instruction(mov(dword_ptr(ptr), value));
+        new_instruction(movabs(qword_free_1, ptr));
+        new_instruction(mov(dword_ptr(qword_free_1), value));
     }
 
     void X86_64_Compiler::exec_asBC_ChkRefS(CompileInfo* info)
@@ -2453,7 +2482,7 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_JitEntry(CompileInfo* info)
     {
-        asUINT offset                = static_cast<asUINT>(info->assembler.offset()) - info->header_size;
+        asDWORD offset               = static_cast<asDWORD>(info->assembler.offset()) - info->header_size;
         asBC_DWORDARG(info->address) = offset;
     }
 
@@ -2466,7 +2495,8 @@ namespace JIT
     {
         asPWORD ptr = arg_value_ptr();
         new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        new_instruction(mov(qword_ptr(vm_stack_pointer), ptr));
+        new_instruction(mov(qword_free_1, ptr));
+        new_instruction(mov(qword_ptr(vm_stack_pointer), qword_free_1));
     }
 
     void X86_64_Compiler::exec_asBC_LoadThisR(CompileInfo* info)
@@ -2605,7 +2635,7 @@ namespace JIT
         asUINT size  = arg_value_dword(1);
 
         Label is_valid = info->assembler.newLabel();
-        Label end = info->assembler.newLabel();
+        Label end      = info->assembler.newLabel();
 
         new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset)));
 
@@ -2626,7 +2656,7 @@ namespace JIT
         asUINT off   = arg_value_dword(0);
 
         Label is_valid = info->assembler.newLabel();
-        Label end = info->assembler.newLabel();
+        Label end      = info->assembler.newLabel();
 
         new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset)));
 
@@ -2646,11 +2676,11 @@ namespace JIT
     void X86_64_Compiler::exec_asBC_SetListType(CompileInfo* info)
     {
         short offset = arg_offset(0);
-        asUINT type = arg_value_dword(1);
-        asUINT off  = arg_value_dword(0);
+        asUINT type  = arg_value_dword(1);
+        asUINT off   = arg_value_dword(0);
 
         Label is_valid = info->assembler.newLabel();
-        Label end = info->assembler.newLabel();
+        Label end      = info->assembler.newLabel();
 
         new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset)));
 

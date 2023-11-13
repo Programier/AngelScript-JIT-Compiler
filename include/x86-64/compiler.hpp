@@ -89,7 +89,7 @@ namespace JIT
         asUINT process_instruction(CompileInfo* info);
         void init(CompileInfo* info);
         void restore_registers(CompileInfo* info);
-        void save_registers(CompileInfo* info);
+        void save_registers(CompileInfo* info, bool ret = false);
 
         size_t find_label_for_jump(CompileInfo* info);
         void bind_label_if_required(CompileInfo* info);

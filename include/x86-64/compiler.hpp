@@ -28,6 +28,9 @@
 #include <vector>
 
 
+#include <map>
+#include <set>
+
 namespace JIT
 {
     using namespace asmjit::x86;
@@ -70,14 +73,17 @@ namespace JIT
         JitRuntime _M_rt;
         void (X86_64_Compiler::*exec[static_cast<size_t>(asBC_MAXBYTECODE)])(CompileInfo*);
         const char* code_names[static_cast<size_t>(asBC_MAXBYTECODE)];
-
         bool _M_with_suspend;
+
+        std::map<std::string, std::set<unsigned int>> _M_skip_instructions;
 
     public:
         X86_64_Compiler(bool with_suspend = false);
 
         int CompileFunction(asIScriptFunction* function, asJITFunction* output) override;
         void ReleaseJITFunction(asJITFunction func) override;
+
+        void push_instruction_index_for_skip(const std::string& name, unsigned int index);
 
     private:
         asUINT process_instruction(CompileInfo* info);

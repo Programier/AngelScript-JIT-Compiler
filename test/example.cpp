@@ -1,11 +1,7 @@
-
-double factorial(double value)
+void main()
 {
-    return value < 1 ? 1 : value * factorial(value - 1);
-}
-
-int main()
-{
-    print(formatFloat(factorial(5)));
-    return 0;
+    for(int i =0; i < 10; i++)
+    {
+        print(formatInt(i));
+    }
 }

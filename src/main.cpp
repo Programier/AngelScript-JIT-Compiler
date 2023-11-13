@@ -19,7 +19,7 @@ void message_callback(const asSMessageInfo* msg, void* param)
 int main(int argc, char** argv)
 try
 {
-    if(argc == 1)
+    if (argc == 1)
     {
         printf("Usage: ./program <file>\n");
         return -1;
@@ -33,10 +33,7 @@ try
     }
 
 
-
     std::string code((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-
-
     asIScriptEngine* engine = asCreateScriptEngine();
     engine->SetEngineProperty(asEP_INCLUDE_JIT_INSTRUCTIONS, 1);
     engine->SetMessageCallback(asFUNCTION(message_callback), 0, asCALL_CDECL);
@@ -46,6 +43,20 @@ try
 
     JIT::X86_64_Compiler compiler;
     engine->SetJITCompiler(&compiler);
+
+    std::string current_name = "";
+    for (int i = 2; i < argc; i++)
+    {
+        try
+        {
+            unsigned int index = static_cast<unsigned int>(std::stoi(argv[i]));
+            compiler.push_instruction_index_for_skip(current_name, index);
+        }
+        catch (...)
+        {
+            current_name = argv[i];
+        }
+    }
 
     asIScriptModule* module = engine->GetModule("Module", asGM_ALWAYS_CREATE);
     module->AddScriptSection("script", code.c_str());
@@ -60,6 +71,7 @@ try
 
     printf("Exec time: %zu milliseconds\n", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count());
     context->Release();
+
     return 0;
 }
 catch (const std::exception& e)

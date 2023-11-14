@@ -1,7 +1,7 @@
 #include <angelscript.h>
 #include <chrono>
 #include <fstream>
-#include <x86-64/compiler.hpp>
+#include <arm64/compiler.hpp>
 
 
 void print(const std::string& str)
@@ -41,7 +41,7 @@ try
 
     engine->RegisterGlobalFunction("void print(const string& in)", asFUNCTION(print), asCALL_CDECL);
 
-    JIT::X86_64_Compiler compiler;
+    JIT::ARM64_Compiler compiler;
     engine->SetJITCompiler(&compiler);
 
     std::string current_name = "";

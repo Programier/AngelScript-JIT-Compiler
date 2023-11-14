@@ -10,6 +10,8 @@ set(ANGELSCRIPTJIT_PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 set(ANGELSCRIPTJIT_SOURCES_ROOT ANGELSCRIPTJIT_PROJECT_ROOT}/src)
 include_directories("include/")
 
+set(ASMJIT_STATIC on)
+
 add_subdirectory(angelscript)
 add_subdirectory(libs/asmjit)
 add_subdirectory(src)

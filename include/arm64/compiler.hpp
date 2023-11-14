@@ -23,7 +23,7 @@
 
 #pragma once
 #include <angelscript.h>
-#include <asmjit/asmjit.h>
+#include <asmjit/a64.h>
 #include <functional>
 #include <vector>
 
@@ -34,11 +34,11 @@
 
 namespace JIT
 {
-    using namespace asmjit::x86;
+    using namespace asmjit::a64;
     using namespace asmjit;
 
 
-    class X86_64_Compiler : public asIJITCompiler
+    class ARM64_Compiler : public asIJITCompiler
     {
     private:
         struct LabelInfo {
@@ -63,23 +63,23 @@ namespace JIT
             asEBCInstr instruction;
 
             template<typename T>
-            asmjit::x86::Mem insert_constant(T value)
+            asmjit::a64::Mem insert_constant(T value)
             {
                 size_t value_offset;
                 const_pool->add(&value, sizeof(value), value_offset);
-                return x86::ptr(*const_pool_label, value_offset);
+                return a64::ptr(*const_pool_label, value_offset);
             }
         };
 
         JitRuntime _M_rt;
-        void (X86_64_Compiler::*exec[static_cast<size_t>(asBC_MAXBYTECODE)])(CompileInfo*);
+        void (ARM64_Compiler::*exec[static_cast<size_t>(asBC_MAXBYTECODE)])(CompileInfo*);
         const char* code_names[static_cast<size_t>(asBC_MAXBYTECODE)];
         bool _M_with_suspend;
 
         std::map<std::string, std::set<unsigned int>> _M_skip_instructions;
 
     public:
-        X86_64_Compiler(bool with_suspend = false);
+        ARM64_Compiler(bool with_suspend = false);
 
         int CompileFunction(asIScriptFunction* function, asJITFunction* output) override;
         void ReleaseJITFunction(asJITFunction func) override;

@@ -77,6 +77,9 @@ namespace JIT
     static constexpr inline size_t const_pool_size = 64;
 
 #if PLATFORM_LINUX
+    static constexpr inline Gpq stack_pointer MAYBE_UNUSED = rsp;
+    static constexpr inline Gpq base_pointer MAYBE_UNUSED  = rbp;
+
     static constexpr inline Gpq qword_free_1 MAYBE_UNUSED = rax;
     static constexpr inline Gpq qword_free_2 MAYBE_UNUSED = rbx;
     static constexpr inline Gpq qword_free_3 MAYBE_UNUSED = r14;
@@ -133,6 +136,8 @@ namespace JIT
 
 
 #elif PLATFORM_WINDOWS
+    static constexpr inline Gpq stack_pointer MAYBE_UNUSED = rsp;
+    static constexpr inline Gpq base_pointer MAYBE_UNUSED  = rbp;
 
     static constexpr inline Gpq qword_free_1 MAYBE_UNUSED = rax;
     static constexpr inline Gpq qword_free_2 MAYBE_UNUSED = rbx;
@@ -192,12 +197,12 @@ namespace JIT
 
     static float STDCALL_DECL mod_float(float a, float b)
     {
-        return std::fmod<float, float>(a, b);
+        return std::fmodf(a, b);
     }
 
     static float STDCALL_DECL mod_double(double a, double b)
     {
-        return std::fmod<double, double>(a, b);
+        return std::fmod(a, b);
     }
 
     static int32_t STDCALL_DECL ipow(int32_t a, int32_t b)
@@ -222,12 +227,12 @@ namespace JIT
 
     static float STDCALL_DECL fpow(float a, float b)
     {
-        return std::pow<float, float>(a, b);
+        return std::powf(a, b);
     }
 
     static double STDCALL_DECL dpow(double a, double b)
     {
-        return std::pow<double, double>(a, b);
+        return std::pow(a, b);
     }
 
     static double STDCALL_DECL dipow(double a, int b)
@@ -610,11 +615,11 @@ namespace JIT
 
     void X86_64_Compiler::init(CompileInfo* info)
     {
-        new_instruction(push(rbp));
-        new_instruction(mov(rbp, rsp));
-        new_instruction(sub(rsp, -vm_register_offset));
+        new_instruction(push(base_pointer));
+        new_instruction(mov(base_pointer, stack_pointer));
+        new_instruction(sub(stack_pointer, -vm_register_offset));
 
-        new_instruction(mov(qword_ptr(rbp, vm_register_offset), qword_first_arg));
+        new_instruction(mov(qword_ptr(base_pointer, vm_register_offset), qword_first_arg));
         restore_registers(info);
 
         // Restore position of execution
@@ -657,7 +662,7 @@ namespace JIT
 
     void X86_64_Compiler::restore_registers(CompileInfo* info)
     {
-        new_instruction(mov(restore_register, qword_ptr(rbp, vm_register_offset)));
+        new_instruction(mov(restore_register, qword_ptr(base_pointer, vm_register_offset)));
 
         new_instruction(
                 mov(vm_stack_frame_pointer, qword_ptr(restore_register, offsetof(asSVMRegisters, stackFramePointer))));
@@ -669,7 +674,7 @@ namespace JIT
 
     void X86_64_Compiler::save_registers(CompileInfo* info, bool ret)
     {
-        new_instruction(mov(restore_register, qword_ptr(rbp, vm_register_offset)));
+        new_instruction(mov(restore_register, qword_ptr(base_pointer, vm_register_offset)));
         if (ret)
         {
             new_instruction(movabs(qword_free_1, info->address));

@@ -22,6 +22,7 @@
 
 
 #include <algorithm>
+#include <cinttypes>
 #include <cmath>
 #include <cstring>
 #include <stdexcept>
@@ -1171,7 +1172,7 @@ namespace JIT
         new_instruction(jmp(end));
 
         new_instruction(bind(is_ok));
-        new_instruction(mov(dword_third_arg, size));
+        new_instruction(mov(qword_third_arg, size));
         save_registers(info);
         new_instruction(call(std::memcpy));
         restore_registers(info);
@@ -1318,7 +1319,7 @@ namespace JIT
         int value     = arg_value_int();
         short offset0 = arg_offset(0);
 
-        new_instruction(mov(qword_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
 
         asmjit::Label is_less         = info->assembler.newLabel();
         asmjit::Label is_greater_than = info->assembler.newLabel();
@@ -1702,7 +1703,7 @@ namespace JIT
         short offset = arg_offset(0);
         new_instruction(mov(qword_free_1, vm_stack_frame_pointer));
         new_instruction(add(qword_free_1, offset));
-        new_instruction(mov(vm_value_q, dword_free_1));
+        new_instruction(mov(vm_value_q, qword_free_1));
     }
 
     void X86_64_Compiler::exec_asBC_PGA(CompileInfo* info)
@@ -2134,13 +2135,14 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_iTOb(CompileInfo* info)
     {
-        new_instruction(mov(vm_value_d, vm_value_b));
+        short offset0 = arg_offset(0);
+        info->assembler.and_(dword_ptr(vm_stack_frame_pointer, offset0), static_cast<std::uint8_t>(255));
     }
 
     void X86_64_Compiler::exec_asBC_iTOw(CompileInfo* info)
     {
         short offset0 = arg_offset(0);
-        info->assembler.mov(word_ptr(vm_stack_frame_pointer, offset0 + 2), static_cast<asWORD>(0));
+        info->assembler.and_(dword_ptr(vm_stack_frame_pointer, offset0), ~static_cast<asWORD>(0));
     }
 
     void X86_64_Compiler::exec_asBC_SetV1(CompileInfo* info)
@@ -2544,7 +2546,7 @@ namespace JIT
         new_instruction(mov(dword_div_first_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
         new_instruction(mov(dword_div_mod_result, 0));
         new_instruction(div(dword_ptr(vm_stack_frame_pointer, offset2)));
-        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_div_mod_result));
+        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_div_first_arg));
     }
 
     void X86_64_Compiler::exec_asBC_MODu(CompileInfo* info)
@@ -2592,16 +2594,14 @@ namespace JIT
 
         new_instruction(mov(qword_free_1, vm_stack_frame_pointer));
         new_instruction(add(qword_free_1, offset0));
-        new_instruction(mov(qword_free_2, qword_ptr(qword_free_1)));
-        new_instruction(cmp(qword_free_2, 0));
+        new_instruction(mov(vm_value_q, qword_ptr(qword_free_1)));
+        new_instruction(cmp(vm_value_q, 0));
 
         new_instruction(jne(is_valid));
         new_instruction(call(make_exception_nullptr_access));
 
         new_instruction(bind(is_valid));
-        new_instruction(add(qword_free_2, offset1));
-
-        new_instruction(mov(vm_value_q, qword_free_2));
+        new_instruction(add(vm_value_q, offset1));
     }
 
     void X86_64_Compiler::exec_asBC_LoadVObjR(CompileInfo* info)

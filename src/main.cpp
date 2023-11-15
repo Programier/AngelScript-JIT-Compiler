@@ -1,8 +1,9 @@
 #include <angelscript.h>
+#include <arm64/compiler.hpp>
 #include <chrono>
 #include <fstream>
-#include <arm64/compiler.hpp>
 #include <x86-64/compiler.hpp>
+#include <cstring>
 
 
 void print(const std::string& str)
@@ -20,6 +21,18 @@ void message_callback(const asSMessageInfo* msg, void* param)
 int main(int argc, char** argv)
 try
 {
+    bool with_jit = true;
+
+    for (int i = 1; i < argc; i++)
+    {
+        if (std::strstr("--nojit", argv[i]) != nullptr)
+        {
+            with_jit = false;
+
+            printf("Disabled JIT!\n");
+        }
+    }
+
     if (argc == 1)
     {
         printf("Usage: ./program <file>\n");
@@ -36,7 +49,8 @@ try
 
     std::string code((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     asIScriptEngine* engine = asCreateScriptEngine();
-    engine->SetEngineProperty(asEP_INCLUDE_JIT_INSTRUCTIONS, 1);
+    if (with_jit)
+        engine->SetEngineProperty(asEP_INCLUDE_JIT_INSTRUCTIONS, 1);
     engine->SetMessageCallback(asFUNCTION(message_callback), 0, asCALL_CDECL);
     asInitializeAddons(engine);
 
@@ -46,7 +60,8 @@ try
 #else
     JIT::X86_64_Compiler compiler;
 #endif
-    engine->SetJITCompiler(&compiler);
+    if (with_jit)
+        engine->SetJITCompiler(&compiler);
 
     std::string current_name = "";
     for (int i = 2; i < argc; i++)

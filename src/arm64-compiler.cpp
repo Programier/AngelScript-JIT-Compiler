@@ -84,13 +84,13 @@ namespace JIT
     static constexpr inline GpX stack_frame_pointer MAYBE_UNUSED = x29;
     static constexpr inline GpX base_pointer MAYBE_UNUSED        = x30;
 
-    static constexpr inline GpX qword_free_1 MAYBE_UNUSED = x10;
-    static constexpr inline GpX qword_free_2 MAYBE_UNUSED = x11;
-    static constexpr inline GpX qword_free_3 MAYBE_UNUSED = x12;
+    static constexpr inline GpX qword_free_1 MAYBE_UNUSED = x9;
+    static constexpr inline GpX qword_free_2 MAYBE_UNUSED = x10;
+    static constexpr inline GpX qword_free_3 MAYBE_UNUSED = x11;
 
-    static constexpr inline GpW dword_free_1 MAYBE_UNUSED = w10;
-    static constexpr inline GpW dword_free_2 MAYBE_UNUSED = w11;
-    static constexpr inline GpW dword_free_3 MAYBE_UNUSED = w12;
+    static constexpr inline GpW dword_free_1 MAYBE_UNUSED = w9;
+    static constexpr inline GpW dword_free_2 MAYBE_UNUSED = w10;
+    static constexpr inline GpW dword_free_3 MAYBE_UNUSED = w11;
 
 
     static constexpr inline VecS float_free_1 MAYBE_UNUSED  = s0;
@@ -115,14 +115,14 @@ namespace JIT
     static constexpr inline VecS float_return MAYBE_UNUSED  = s0;
     static constexpr inline VecD double_return MAYBE_UNUSED = d0;
 
-    static constexpr inline GpX restore_register = x9;
+    static constexpr inline GpX restore_register = x8;
 
     static constexpr inline GpX vm_stack_frame_pointer MAYBE_UNUSED = x3;
     static constexpr inline GpX vm_stack_pointer MAYBE_UNUSED       = x4;
     static constexpr inline GpX vm_value_q MAYBE_UNUSED             = x5;
-    static constexpr inline GpW vm_value_d MAYBE_UNUSED             = w6;
-    static constexpr inline GpX vm_object MAYBE_UNUSED              = x7;
-    static constexpr inline GpX vm_object_type MAYBE_UNUSED         = x8;
+    static constexpr inline GpW vm_value_d MAYBE_UNUSED             = w5;
+    static constexpr inline GpX vm_object MAYBE_UNUSED              = x6;
+    static constexpr inline GpX vm_object_type MAYBE_UNUSED         = x7;
 
 #endif
 

@@ -68,6 +68,12 @@
 #define PLATFORM_LINUX 0
 #endif
 
+#if !PLATFORM_WINDOWS && !PLATFORM_LINUX
+#define PLATFORM_DEFAULT 1
+#else
+#define PLATFORM_DEFAULT 0
+#endif
+
 namespace JIT
 {
     static constexpr inline int32_t half_ptr_size      = static_cast<int32_t>(sizeof(void*) / 2);
@@ -76,7 +82,7 @@ namespace JIT
 
     static constexpr inline size_t const_pool_size = 64;
 
-#if PLATFORM_LINUX
+#if PLATFORM_LINUX || PLATFORM_DEFAULT
     static constexpr inline Gpq stack_pointer MAYBE_UNUSED = rsp;
     static constexpr inline Gpq base_pointer MAYBE_UNUSED  = rbp;
 
@@ -197,7 +203,7 @@ namespace JIT
 
     static float STDCALL_DECL mod_float(float a, float b)
     {
-        return std::fmodf(a, b);
+        return fmodf(a, b);
     }
 
     static float STDCALL_DECL mod_double(double a, double b)
@@ -227,7 +233,7 @@ namespace JIT
 
     static float STDCALL_DECL fpow(float a, float b)
     {
-        return std::powf(a, b);
+        return powf(a, b);
     }
 
     static double STDCALL_DECL dpow(double a, double b)
@@ -794,8 +800,8 @@ namespace JIT
         asDWORD value = *(asDWORD*) arg_value_ptr();
 
         new_instruction(sub(vm_stack_pointer, half_ptr_size));
-        new_instruction(mov(qword_free_1, value));
-        new_instruction(mov(dword_ptr(vm_stack_pointer), qword_free_1));
+        new_instruction(mov(dword_free_1, value));
+        new_instruction(mov(dword_ptr(vm_stack_pointer), dword_free_1));
     }
 
     void X86_64_Compiler::exec_asBC_LdGRdR4(CompileInfo* info)
@@ -995,32 +1001,32 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_INCi16(CompileInfo* info)
     {
-        new_instruction(inc(vm_value_q));
+        new_instruction(inc(word_ptr(vm_value_w)));
     }
 
     void X86_64_Compiler::exec_asBC_INCi8(CompileInfo* info)
     {
-        new_instruction(inc(vm_value_q));
+        new_instruction(inc(byte_ptr(vm_value_q)));
     }
 
     void X86_64_Compiler::exec_asBC_DECi16(CompileInfo* info)
     {
-        new_instruction(dec(vm_value_q));
+        new_instruction(dec(word_ptr(vm_value_q)));
     }
 
     void X86_64_Compiler::exec_asBC_DECi8(CompileInfo* info)
     {
-        new_instruction(dec(vm_value_q));
+        new_instruction(dec(byte_ptr(vm_value_q)));
     }
 
     void X86_64_Compiler::exec_asBC_INCi(CompileInfo* info)
     {
-        new_instruction(inc(vm_value_q));
+        new_instruction(inc(dword_ptr(vm_value_q)));
     }
 
     void X86_64_Compiler::exec_asBC_DECi(CompileInfo* info)
     {
-        new_instruction(dec(vm_value_q));
+        new_instruction(dec(dword_ptr(vm_value_q)));
     }
 
     void X86_64_Compiler::exec_asBC_INCf(CompileInfo* info)
@@ -1215,7 +1221,7 @@ namespace JIT
         asmjit::Label end        = info->assembler.newLabel();
 
         new_instruction(comisd(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        new_instruction(jnp(is_greater));
+        new_instruction(jne(is_greater));
         new_instruction(mov(vm_value_d, 0));
         new_instruction(jmp(end));
 
@@ -1267,7 +1273,7 @@ namespace JIT
         asmjit::Label end        = info->assembler.newLabel();
 
         new_instruction(comiss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        new_instruction(jnp(is_greater));
+        new_instruction(jne(is_greater));
         new_instruction(mov(vm_value_d, 0));
         new_instruction(jmp(end));
 
@@ -1309,7 +1315,7 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_CMPIi(CompileInfo* info)
     {
-        int value     = asBC_INTARG(info->address);
+        int value     = arg_value_int();
         short offset0 = arg_offset(0);
 
         new_instruction(mov(qword_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
@@ -1346,7 +1352,7 @@ namespace JIT
         asmjit::Label end        = info->assembler.newLabel();
 
         new_instruction(comiss(xmm_free_1, info->insert_constant<float>(value)));
-        new_instruction(jnp(is_greater));
+        new_instruction(jne(is_greater));
         new_instruction(mov(vm_value_d, 0));
         new_instruction(jmp(end));
 
@@ -1365,7 +1371,7 @@ namespace JIT
         short offset0 = arg_offset(0);
         asDWORD value = arg_value_dword(0);
 
-        new_instruction(mov(qword_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
 
         asmjit::Label is_less    = info->assembler.newLabel();
         asmjit::Label is_greater = info->assembler.newLabel();
@@ -1393,7 +1399,7 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_PopRPtr(CompileInfo* info)
     {
-        new_instruction(mov(vm_value_q, dword_ptr(vm_stack_pointer)));
+        new_instruction(mov(vm_value_q, qword_ptr(vm_stack_pointer)));
         new_instruction(add(vm_stack_pointer, ptr_size_1));
     }
 
@@ -1538,7 +1544,7 @@ namespace JIT
     void X86_64_Compiler::exec_asBC_SetV4(CompileInfo* info)
     {
         short offset  = arg_offset(0);
-        asDWORD value = asBC_DWORDARG(info->address);
+        asDWORD value = arg_value_dword(0);
         new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset), value));
     }
 
@@ -1696,7 +1702,7 @@ namespace JIT
         short offset = arg_offset(0);
         new_instruction(mov(qword_free_1, vm_stack_frame_pointer));
         new_instruction(add(qword_free_1, offset));
-        new_instruction(mov(vm_value_q, qword_free_1));
+        new_instruction(mov(vm_value_q, dword_free_1));
     }
 
     void X86_64_Compiler::exec_asBC_PGA(CompileInfo* info)

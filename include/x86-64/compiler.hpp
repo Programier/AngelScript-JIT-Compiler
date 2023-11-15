@@ -47,7 +47,7 @@ namespace JIT
         };
 
         struct CompileInfo {
-            Assembler assembler;
+            x86::Assembler assembler;
             ConstPool* const_pool;
             Label* const_pool_label;
 

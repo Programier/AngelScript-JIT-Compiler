@@ -1,4 +1,7 @@
 void main()
 {
-    print("Hello");
+    int value = -10;
+
+    float tmp = value;
+    print(formatFloat(tmp));
 }

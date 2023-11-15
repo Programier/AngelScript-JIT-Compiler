@@ -62,6 +62,12 @@
 #define PLAPLATFORM_ANDROID 0
 #endif
 
+#if !PLATFORM_ANDROID
+#define PLATFORM_DEFAULT 1
+#else
+#define PLATFORM_DEFAULT 0
+#endif
+
 namespace JIT
 {
     static constexpr inline int32_t half_ptr_size      = static_cast<int32_t>(sizeof(void*) / 2);
@@ -70,7 +76,7 @@ namespace JIT
 
     static constexpr inline size_t const_pool_size = 64;
 
-#if PLATFORM_ANDROID
+#if PLATFORM_ANDROID || PLATFORM_DEFAULT
 
 
     static constexpr inline GpX stack_pointer MAYBE_UNUSED       = sp;
@@ -85,16 +91,11 @@ namespace JIT
     static constexpr inline GpW dword_free_2 MAYBE_UNUSED = w11;
     static constexpr inline GpW dword_free_3 MAYBE_UNUSED = w12;
 
-    //    static constexpr inline Gpw word_free_1 MAYBE_UNUSED = ax;
-    //    static constexpr inline Gpw word_free_2 MAYBE_UNUSED = bx;
-    //    static constexpr inline Gpw word_free_3 MAYBE_UNUSED = r14w;
 
-    //    static constexpr inline Gpb byte_free_1 MAYBE_UNUSED = al;
-    //    static constexpr inline Gpb byte_free_2 MAYBE_UNUSED = bl;
-    //    static constexpr inline Gpb byte_free_3 MAYBE_UNUSED = r14b;
-
-    //    static constexpr inline Xmm xmm_free_1 MAYBE_UNUSED = xmm0;
-    //    static constexpr inline Xmm xmm_free_2 MAYBE_UNUSED = xmm1;
+    static constexpr inline VecS float_free_1 MAYBE_UNUSED  = s0;
+    static constexpr inline VecS float_free_2 MAYBE_UNUSED  = s1;
+    static constexpr inline VecD double_free_1 MAYBE_UNUSED = d0;
+    static constexpr inline VecD double_free_2 MAYBE_UNUSED = d1;
 
     //    static constexpr inline Gpd dword_div_first_arg MAYBE_UNUSED  = eax;
     //    static constexpr inline Gpd dword_div_mod_result MAYBE_UNUSED = edx;
@@ -108,10 +109,10 @@ namespace JIT
     static constexpr inline GpW dword_second_arg MAYBE_UNUSED = w1;
     static constexpr inline GpW dword_third_arg MAYBE_UNUSED  = w2;
 
-    //    static constexpr inline Xmm float_firts_arg MAYBE_UNUSED   = xmm0;
-    //    static constexpr inline Xmm float_second_arg MAYBE_UNUSED  = xmm1;
-    //    static constexpr inline Xmm double_firts_arg MAYBE_UNUSED  = xmm0;
-    //    static constexpr inline Xmm double_second_arg MAYBE_UNUSED = xmm1;
+    static constexpr inline VecS float_firts_arg MAYBE_UNUSED   = s0;
+    static constexpr inline VecS float_second_arg MAYBE_UNUSED  = s1;
+    static constexpr inline VecD double_firts_arg MAYBE_UNUSED  = d0;
+    static constexpr inline VecD double_second_arg MAYBE_UNUSED = d1;
 
     //    static constexpr inline Gpd dword_return MAYBE_UNUSED  = eax;
     //    static constexpr inline Gpq qword_return MAYBE_UNUSED  = rax;
@@ -133,7 +134,7 @@ namespace JIT
 
     static float STDCALL_DECL mod_float(float a, float b)
     {
-        return std::fmodf(a, b);
+        return fmodf(a, b);
     }
 
     static float STDCALL_DECL mod_double(double a, double b)
@@ -163,7 +164,7 @@ namespace JIT
 
     static float STDCALL_DECL fpow(float a, float b)
     {
-        return std::powf(a, b);
+        return powf(a, b);
     }
 
     static double STDCALL_DECL dpow(double a, double b)
@@ -566,9 +567,9 @@ namespace JIT
         new_instruction(str(qword_first_arg, a64::ptr(stack_pointer, vm_register_offset - ptr_size_1)));
         restore_registers(info);
 
-        //        // Restore position of execution
+        // Restore position of execution
         Label this_instruction = info->assembler.newLabel();
-        info->header_size = info->assembler.offset();
+        info->header_size      = info->assembler.offset();
 
         new_instruction(bind(this_instruction));
         new_instruction(adr(qword_free_1, this_instruction));
@@ -672,85 +673,84 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_PopPtr(CompileInfo* info)
     {
-        //new_instruction(add(vm_stack_pointer, ptr_size_1));
+        new_instruction(add(vm_stack_pointer, vm_stack_pointer, ptr_size_1));
     }
 
     void ARM64_Compiler::exec_asBC_PshGPtr(CompileInfo* info)
     {
-        //        asPWORD value = *(asPWORD*) asBC_PTRARG(info->address);
+        asPWORD value = *(asPWORD*) asBC_PTRARG(info->address);
 
-        //        new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        //        new_instruction(movabs(qword_free_1, value));
-        //        new_instruction(mov(dword_ptr(vm_stack_pointer), qword_free_1));
+        new_instruction(sub(vm_stack_pointer, vm_stack_pointer, ptr_size_1));
+        new_instruction(mov(qword_free_1, value));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_pointer)));
     }
 
     void ARM64_Compiler::exec_asBC_PshC4(CompileInfo* info)
     {
-        //        new_instruction(sub(vm_stack_pointer, half_ptr_size));
-        //        new_instruction(mov(dword_ptr(vm_stack_pointer), arg_value_dword(0)));
+        new_instruction(sub(vm_stack_pointer, vm_stack_pointer, half_ptr_size));
+        new_instruction(mov(dword_free_1, arg_value_dword(0)));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_pointer)));
     }
 
     void ARM64_Compiler::exec_asBC_PshV4(CompileInfo* info)
     {
-        //        new_instruction(sub(vm_stack_pointer, half_ptr_size));
-        //        short offset = arg_offset(0);
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset)));
-        //        new_instruction(mov(dword_ptr(vm_stack_pointer), dword_free_1));
+        new_instruction(sub(vm_stack_pointer, vm_stack_pointer, half_ptr_size));
+        short offset = arg_offset(0);
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_pointer)));
     }
 
     void ARM64_Compiler::exec_asBC_PSF(CompileInfo* info)
     {
-        //        short offset = arg_offset(0);
+        short offset = arg_offset(0);
 
-        //        new_instruction(sub(vm_stack_pointer, ptr_size_1));
-
-        //        new_instruction(mov(qword_free_1, vm_stack_frame_pointer));
-        //        new_instruction(add(qword_free_1, offset));
-        //        new_instruction(mov(qword_ptr(vm_stack_pointer), qword_free_1));
+        new_instruction(sub(vm_stack_pointer, vm_stack_pointer, ptr_size_1));
+        new_instruction(mov(qword_free_1, vm_stack_frame_pointer));
+        new_instruction(mov(qword_free_2, offset));
+        new_instruction(add(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_pointer)));
     }
 
     void ARM64_Compiler::exec_asBC_SwapPtr(CompileInfo* info)
     {
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer)));
-        //        new_instruction(mov(qword_free_2, qword_ptr(vm_stack_frame_pointer, ptr_size_1)));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer), qword_free_2));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, ptr_size_1), qword_free_1));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, ptr_size_1)));
+        new_instruction(str(qword_free_2, a64::ptr(vm_stack_frame_pointer)));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, ptr_size_1)));
     }
 
     void ARM64_Compiler::exec_asBC_NOT(CompileInfo* info)
     {
-        //        Label not_equal = info->assembler.newLabel();
-        //        Label end       = info->assembler.newLabel();
+        Label not_equal = info->assembler.newLabel();
+        Label end       = info->assembler.newLabel();
 
 
-        //        new_instruction(cmp(vm_value_q, 0));
-        //        new_instruction(jne(not_equal));
-        //        new_instruction(mov(vm_value_q, 1));
-        //        new_instruction(jmp(end));
+        new_instruction(cmp(vm_value_q, 0));
+        new_instruction(b_ne(not_equal));
+        new_instruction(mov(vm_value_q, 1));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(not_equal));
-        //        new_instruction(mov(vm_value_q, 0));
+        new_instruction(bind(not_equal));
+        new_instruction(mov(vm_value_q, 0));
 
-        //        new_instruction(bind(end));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_PshG4(CompileInfo* info)
     {
-        //        CHECK_IT();
-        //        asDWORD value = *(asDWORD*) arg_value_ptr();
+        asDWORD value = *(asDWORD*) arg_value_ptr();
 
-        //        new_instruction(sub(vm_stack_pointer, half_ptr_size));
-        //        new_instruction(mov(qword_free_1, value));
-        //        new_instruction(mov(dword_ptr(vm_stack_pointer), qword_free_1));
+        new_instruction(sub(vm_stack_pointer, vm_stack_pointer, half_ptr_size));
+        new_instruction(mov(dword_free_1, value));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_pointer)));
     }
 
     void ARM64_Compiler::exec_asBC_LdGRdR4(CompileInfo* info)
     {
-        //        CHECK_IT();
-        //        short offset = arg_offset(0);
-        //        new_instruction(mov(vm_value_q, arg_value_ptr()));
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_value_q)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset), dword_free_1));
+        short offset = arg_offset(0);
+        new_instruction(mov(vm_value_q, arg_value_ptr()));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_value_q)));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_CALL(CompileInfo* info)
@@ -768,185 +768,195 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_JMP(CompileInfo* info)
     {
-        //        LabelInfo& label_info = info->labels[find_label_for_jump(info)];
-        //        new_instruction(jmp(label_info.label));
+        LabelInfo& label_info = info->labels[find_label_for_jump(info)];
+        new_instruction(b(label_info.label));
     }
 
     void ARM64_Compiler::exec_asBC_JZ(CompileInfo* info)
     {
-        //        size_t label_index = find_label_for_jump(info);
-        //        new_instruction(cmp(vm_value_d, 0));
-        //        new_instruction(je(info->labels[label_index].label));
+        size_t label_index = find_label_for_jump(info);
+        new_instruction(cmp(vm_value_d, 0));
+        new_instruction(b_eq(info->labels[label_index].label));
     }
 
     void ARM64_Compiler::exec_asBC_JNZ(CompileInfo* info)
     {
-        //        size_t label_index = find_label_for_jump(info);
-        //        new_instruction(cmp(vm_value_d, 0));
-        //        new_instruction(jne(info->labels[label_index].label));
+        size_t label_index = find_label_for_jump(info);
+        new_instruction(cmp(vm_value_d, 0));
+        new_instruction(b_ne(info->labels[label_index].label));
     }
 
     void ARM64_Compiler::exec_asBC_JS(CompileInfo* info)
     {
-        //        size_t label_index = find_label_for_jump(info);
-        //        new_instruction(cmp(vm_value_d, 0));
-        //        new_instruction(jl(info->labels[label_index].label));
+        size_t label_index = find_label_for_jump(info);
+        new_instruction(cmp(vm_value_d, 0));
+        new_instruction(b_lt(info->labels[label_index].label));
     }
 
     void ARM64_Compiler::exec_asBC_JNS(CompileInfo* info)
     {
-        //        size_t label_index = find_label_for_jump(info);
-        //        new_instruction(cmp(vm_value_d, 0));
-        //        new_instruction(jge(info->labels[label_index].label));
+        size_t label_index = find_label_for_jump(info);
+        new_instruction(cmp(vm_value_d, 0));
+        new_instruction(b_ge(info->labels[label_index].label));
     }
 
     void ARM64_Compiler::exec_asBC_JP(CompileInfo* info)
     {
-        //        size_t label_index = find_label_for_jump(info);
-        //        new_instruction(cmp(vm_value_d, 0));
-        //        new_instruction(jg(info->labels[label_index].label));
+        size_t label_index = find_label_for_jump(info);
+        new_instruction(cmp(vm_value_d, 0));
+        new_instruction(b_gt(info->labels[label_index].label));
     }
 
     void ARM64_Compiler::exec_asBC_JNP(CompileInfo* info)
     {
-        //        size_t label_index = find_label_for_jump(info);
-        //        new_instruction(cmp(vm_value_d, 0));
-        //        new_instruction(jle(info->labels[label_index].label));
+        size_t label_index = find_label_for_jump(info);
+        new_instruction(cmp(vm_value_d, 0));
+        new_instruction(b_le(info->labels[label_index].label));
     }
 
     void ARM64_Compiler::exec_asBC_TZ(CompileInfo* info)
     {
-        //        CHECK_IT();
-        //        Label is_zero = info->assembler.newLabel();
-        //        Label end     = info->assembler.newLabel();
+        Label is_zero = info->assembler.newLabel();
+        Label end     = info->assembler.newLabel();
 
 
-        //        new_instruction(cmp(vm_value_d, 0));
-        //        new_instruction(je(is_zero));
-        //        new_instruction(mov(vm_value_q, 0));
-        //        new_instruction(jmp(end));
+        new_instruction(cmp(vm_value_d, 0));
+        new_instruction(b_eq(is_zero));
+        new_instruction(mov(vm_value_q, 0));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_zero));
-        //        new_instruction(mov(vm_value_q, 1));
-        //        new_instruction(bind(end));
+        new_instruction(bind(is_zero));
+        new_instruction(mov(vm_value_q, 1));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_TNZ(CompileInfo* info)
     {
-        //        // If the value in the register is not 0, then set the register to 1, else to 0
-        //        CHECK_IT();
-        //        Label is_zero = info->assembler.newLabel();
-        //        Label end     = info->assembler.newLabel();
+        // If the value in the register is not 0, then set the register to 1, else to 0
+        Label is_zero = info->assembler.newLabel();
+        Label end     = info->assembler.newLabel();
 
-        //        new_instruction(cmp(vm_value_q, 0));
-        //        new_instruction(je(is_zero));
-        //        new_instruction(mov(vm_value_q, 1));
-        //        new_instruction(jmp(end));
+        new_instruction(cmp(vm_value_q, 0));
+        new_instruction(b_eq(is_zero));
+        new_instruction(mov(vm_value_q, 1));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_zero));
-        //        new_instruction(mov(vm_value_q, 0));
-        //        new_instruction(bind(end));
+        new_instruction(bind(is_zero));
+        new_instruction(mov(vm_value_q, 0));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_TS(CompileInfo* info)
     {
-        //        // If the value in the register is negative, then set the register to 1, else to 0
-        //        CHECK_IT();
-        //        Label is_negative = info->assembler.newLabel();
-        //        Label end         = info->assembler.newLabel();
+        // If the value in the register is negative, then set the register to 1, else to 0
 
-        //        new_instruction(cmp(vm_value_d, 0));
-        //        new_instruction(jl(is_negative));
-        //        new_instruction(mov(vm_value_q, 0));
-        //        new_instruction(jmp(end));
+        Label is_negative = info->assembler.newLabel();
+        Label end         = info->assembler.newLabel();
 
-        //        new_instruction(bind(is_negative));
-        //        new_instruction(mov(vm_value_q, 1));
-        //        new_instruction(bind(end));
+        new_instruction(cmp(vm_value_d, 0));
+        new_instruction(b_lt(is_negative));
+        new_instruction(mov(vm_value_q, 0));
+        new_instruction(b(end));
+
+        new_instruction(bind(is_negative));
+        new_instruction(mov(vm_value_q, 1));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_TNS(CompileInfo* info)
     {
-        //        // If the value in the register is not negative, then set the register to 1, else to 0
-        //        CHECK_IT();
-        //        Label is_negative = info->assembler.newLabel();
-        //        Label end         = info->assembler.newLabel();
+        // If the value in the register is not negative, then set the register to 1, else to 0
 
-        //        new_instruction(cmp(vm_value_d, 0));
-        //        new_instruction(jl(is_negative));
-        //        new_instruction(mov(vm_value_q, 1));
-        //        new_instruction(jmp(end));
+        Label is_negative = info->assembler.newLabel();
+        Label end         = info->assembler.newLabel();
 
-        //        new_instruction(bind(is_negative));
-        //        new_instruction(mov(vm_value_q, 0));
-        //        new_instruction(bind(end));
+        new_instruction(cmp(vm_value_d, 0));
+        new_instruction(b_lt(is_negative));
+        new_instruction(mov(vm_value_q, 1));
+        new_instruction(b(end));
+
+        new_instruction(bind(is_negative));
+        new_instruction(mov(vm_value_q, 0));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_TP(CompileInfo* info)
     {
-        //        // If the value in the register is not negative, then set the register to 1, else to 0
-        //        CHECK_IT();
-        //        Label is_negative = info->assembler.newLabel();
-        //        Label end         = info->assembler.newLabel();
+        // If the value in the register is not negative, then set the register to 1, else to 0
 
-        //        new_instruction(cmp(vm_value_d, 0));
-        //        new_instruction(jl(is_negative));
-        //        new_instruction(mov(vm_value_q, 1));
-        //        new_instruction(jmp(end));
+        Label is_negative = info->assembler.newLabel();
+        Label end         = info->assembler.newLabel();
 
-        //        new_instruction(bind(is_negative));
-        //        new_instruction(mov(vm_value_q, 0));
-        //        new_instruction(bind(end));
+        new_instruction(cmp(vm_value_d, 0));
+        new_instruction(b_lt(is_negative));
+        new_instruction(mov(vm_value_q, 1));
+        new_instruction(b(end));
+
+        new_instruction(bind(is_negative));
+        new_instruction(mov(vm_value_q, 0));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_TNP(CompileInfo* info)
     {
-        //        // If the value in the register is not greater than 0, then set the register to 1, else to 0
-        //        CHECK_IT();
-        //        Label is_le = info->assembler.newLabel();
-        //        Label end   = info->assembler.newLabel();
+        // If the value in the register is not greater than 0, then set the register to 1, else to 0
 
-        //        new_instruction(cmp(vm_value_d, 0));
-        //        new_instruction(jle(is_le));
-        //        new_instruction(mov(vm_value_q, 0));
-        //        new_instruction(jmp(end));
+        Label is_le = info->assembler.newLabel();
+        Label end   = info->assembler.newLabel();
 
-        //        new_instruction(bind(is_le));
-        //        new_instruction(mov(vm_value_q, 1));
-        //        new_instruction(bind(end));
+        new_instruction(cmp(vm_value_d, 0));
+        new_instruction(b_le(is_le));
+        new_instruction(mov(vm_value_q, 0));
+        new_instruction(b(end));
+
+        new_instruction(bind(is_le));
+        new_instruction(mov(vm_value_q, 1));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_NEGi(CompileInfo* info)
     {
-        // short offset = arg_offset(0);
-        // new_instruction(neg(dword_ptr(vm_stack_frame_pointer, offset)));
+        short offset = arg_offset(0);
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(neg(dword_free_1, dword_free_1));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_NEGf(CompileInfo* info)
     {
-        //        short offset = arg_offset(0);
-        //        new_instruction(movss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset)));
-        //        new_instruction(xorps(xmm_free_1, info->insert_constant<int64_t>(-2147483648)));
-        //        new_instruction(movss(dword_ptr(vm_stack_frame_pointer, offset), xmm_free_1));
+        short offset = arg_offset(0);
+
+        new_instruction(ldr(float_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(fneg(float_free_1, float_free_1));
+        new_instruction(str(float_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_NEGd(CompileInfo* info)
     {
-        //        short offset = arg_offset(0);
-        //        new_instruction(movsd(xmm_free_1, qword_ptr(vm_stack_frame_pointer, offset)));
-        //        new_instruction(movq(xmm_free_2, info->insert_constant<int64_t>(-2147483648 << 32)));
-        //        new_instruction(xorpd(xmm_free_1, xmm_free_2));
-        //        new_instruction(movsd(qword_ptr(vm_stack_frame_pointer, offset), xmm_free_1));
+        short offset = arg_offset(0);
+
+        new_instruction(ldr(double_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(fneg(double_free_1, double_free_1));
+        new_instruction(str(double_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_INCi16(CompileInfo* info)
     {
         //new_instruction(inc(vm_value_q));
+
+        new_instruction(ldrsh(dword_free_1, a64::ptr(vm_value_q, sizeof(asDWORD) + (sizeof(asDWORD) / 2))));
+        new_instruction(and_(dword_free_1, dword_free_1, ~static_cast<short>(0)));
+        new_instruction(add(dword_free_1, dword_free_1, 1));
+        new_instruction(and_(dword_free_1, dword_free_1, ~static_cast<short>(0)));
+        new_instruction(strh(dword_free_1, a64::ptr(vm_value_q, sizeof(asDWORD) + (sizeof(asDWORD) / 2))));
     }
 
     void ARM64_Compiler::exec_asBC_INCi8(CompileInfo* info)
     {
         //new_instruction(inc(vm_value_q));
+        //        new_instruction(ubfx(dword_free_1, vm_value_q, 0, 8));
+        //        new_instruction(add(dword_free_1, dword_free_1, 1));
+        //        new_instruction(add())
     }
 
     void ARM64_Compiler::exec_asBC_DECi16(CompileInfo* info)
@@ -961,131 +971,145 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_INCi(CompileInfo* info)
     {
-        //new_instruction(inc(vm_value_q));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_value_q)));
+        new_instruction(add(dword_free_1, dword_free_1, 1));
+        new_instruction(str(dword_free_1, a64::ptr(vm_value_q)));
     }
 
     void ARM64_Compiler::exec_asBC_DECi(CompileInfo* info)
     {
-        //new_instruction(dec(vm_value_q));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_value_q)));
+        new_instruction(sub(dword_free_1, dword_free_1, 1));
+        new_instruction(str(dword_free_1, a64::ptr(vm_value_q)));
     }
 
     void ARM64_Compiler::exec_asBC_INCf(CompileInfo* info)
     {
-        //        new_instruction(pxor(xmm_free_1, xmm_free_1));
-        //        new_instruction(movss(xmm_free_1, qword_ptr(vm_value_q)));
-        //        new_instruction(addss(xmm_free_1, info->insert_constant<float>(1.0)));
-        //        new_instruction(movss(qword_ptr(vm_value_q), xmm_free_1));
+        new_instruction(ldr(float_free_1, a64::ptr(vm_value_q)));
+        new_instruction(ldr(float_free_2, info->insert_constant<float>(1.0f)));
+        new_instruction(fadd(float_free_1, float_free_1, float_free_2));
+        new_instruction(str(float_free_1, a64::ptr(vm_value_q)));
     }
 
     void ARM64_Compiler::exec_asBC_DECf(CompileInfo* info)
     {
-        //        new_instruction(pxor(xmm_free_1, xmm_free_1));
-        //        new_instruction(movss(xmm_free_1, qword_ptr(vm_value_q)));
-        //        new_instruction(subss(xmm_free_1, info->insert_constant<float>(1.0)));
-        //        new_instruction(movss(qword_ptr(vm_value_q), xmm_free_1));
+        new_instruction(ldr(float_free_1, a64::ptr(vm_value_q)));
+        new_instruction(ldr(float_free_2, info->insert_constant<float>(1.0f)));
+        new_instruction(fsub(float_free_1, float_free_1, float_free_2));
+        new_instruction(str(float_free_1, a64::ptr(vm_value_q)));
     }
 
     void ARM64_Compiler::exec_asBC_INCd(CompileInfo* info)
     {
-        //        new_instruction(pxor(xmm_free_1, xmm_free_1));
-        //        new_instruction(movsd(xmm_free_1, qword_ptr(vm_value_q)));
-        //        new_instruction(addsd(xmm_free_1, info->insert_constant<double>(1.0)));
-        //        new_instruction(movsd(qword_ptr(vm_value_q), xmm_free_1));
+        new_instruction(ldr(double_free_1, a64::ptr(vm_value_q)));
+        new_instruction(ldr(double_free_2, info->insert_constant<double>(1.0)));
+        new_instruction(fadd(double_free_1, double_free_1, double_free_2));
+        new_instruction(str(double_free_1, a64::ptr(vm_value_q)));
     }
 
     void ARM64_Compiler::exec_asBC_DECd(CompileInfo* info)
     {
-        //        new_instruction(pxor(xmm_free_1, xmm_free_1));
-        //        new_instruction(movsd(xmm_free_1, qword_ptr(vm_value_q)));
-        //        new_instruction(subsd(xmm_free_1, info->insert_constant<double>(1.0)));
-        //        new_instruction(movsd(qword_ptr(vm_value_q), xmm_free_1));
+        new_instruction(ldr(double_free_1, a64::ptr(vm_value_q)));
+        new_instruction(ldr(double_free_2, info->insert_constant<double>(1.0)));
+        new_instruction(fsub(double_free_1, double_free_1, double_free_2));
+        new_instruction(str(double_free_1, a64::ptr(vm_value_q)));
     }
 
     void ARM64_Compiler::exec_asBC_IncVi(CompileInfo* info)
     {
-        //        short offset = arg_offset(0);
-        //        new_instruction(inc(dword_ptr(vm_stack_frame_pointer, offset)));
+        short offset = arg_offset(0);
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(add(dword_free_1, dword_free_1, 1));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_DecVi(CompileInfo* info)
     {
-        //        short offset = arg_offset(0);
-        //        new_instruction(dec(dword_ptr(vm_stack_frame_pointer, offset)));
+        short offset = arg_offset(0);
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(sub(dword_free_1, dword_free_1, 1));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_BNOT(CompileInfo* info)
     {
-        //        short offset = arg_offset(0);
-        //        new_instruction(not_(dword_ptr(vm_stack_frame_pointer, offset)));
+        short offset = arg_offset(0);
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(mvn(dword_free_1, dword_free_1));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_BAND(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(and_(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_1));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(and_(dword_free_1, dword_free_1, dword_free_2));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_BOR(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(or_(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_1));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(orr(dword_free_1, dword_free_1, dword_free_2));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_BXOR(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(xor_(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_1));
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
+
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(eor(dword_free_1, dword_free_1, dword_free_2));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_BSLL(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(mov(shift_second_arg, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(sal(dword_free_1, shift_second_arg));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_1));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(lsl(dword_free_1, dword_free_1, dword_free_2));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_BSRL(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(mov(shift_second_arg, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(shr(dword_free_1, shift_second_arg));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_1));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(lsr(dword_free_1, dword_free_1, dword_free_2));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_BSRA(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(mov(shift_second_arg, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(sar(dword_free_1, shift_second_arg));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_1));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(asr(dword_free_1, dword_free_1, dword_free_2));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_COPY(CompileInfo* info)
@@ -1104,16 +1128,16 @@ namespace JIT
         //        new_instruction(je(nullptr_access));
         //        new_instruction(cmp(qword_second_arg, 0));
         //        new_instruction(je(nullptr_access));
-        //        new_instruction(jmp(is_ok));
+        //        new_instruction(b(is_ok));
 
         //        new_instruction(bind(nullptr_access));
-        //        new_instruction(call(make_exception_nullptr_access));
-        //        new_instruction(jmp(end));
+        //        new_instruction(b(make_exception_nullptr_access));
+        //        new_instruction(b(end));
 
         //        new_instruction(bind(is_ok));
         //        new_instruction(mov(dword_third_arg, size));
         //        save_registers(info);
-        //        new_instruction(call(std::memcpy));
+        //        new_instruction(b(std::memcpy));
         //        restore_registers(info);
 
         //        new_instruction(bind(end));
@@ -1121,215 +1145,220 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_PshC8(CompileInfo* info)
     {
-        //        new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        //        new_instruction(mov(qword_free_1, arg_value_qword()));
-        //        new_instruction(mov(qword_ptr(vm_stack_pointer), qword_free_1));
+        new_instruction(sub(vm_stack_pointer, vm_stack_pointer, ptr_size_1));
+        new_instruction(mov(qword_free_1, arg_value_qword()));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_pointer)));
     }
 
     void ARM64_Compiler::exec_asBC_PshVPtr(CompileInfo* info)
     {
-        //        short offset = arg_offset(0);
+        short offset = arg_offset(0);
 
-        //        new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        //        new_instruction(mov(qword_free_2, qword_ptr(vm_stack_frame_pointer, offset)));
-        //        new_instruction(mov(qword_ptr(vm_stack_pointer), qword_free_2));
+        new_instruction(sub(vm_stack_pointer, vm_stack_pointer, ptr_size_1));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(str(qword_free_2, a64::ptr(vm_stack_pointer)));
     }
 
     void ARM64_Compiler::exec_asBC_RDSPtr(CompileInfo* info)
     {
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_pointer)));
-        //        new_instruction(cmp(qword_free_1, 0));
-        //        Label is_valid = info->assembler.newLabel();
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_pointer)));
+        new_instruction(cmp(qword_free_1, 0));
+        Label is_valid = info->assembler.newLabel();
 
-        //        new_instruction(jne(is_valid));
-        //        new_instruction(call(make_exception_nullptr_access));
+        new_instruction(b_ne(is_valid));
+        new_instruction(b(make_exception_nullptr_access));
 
-        //        new_instruction(bind(is_valid));
-        //        new_instruction(mov(qword_free_1, qword_ptr(qword_free_1)));
-        //        new_instruction(mov(qword_ptr(vm_stack_pointer), qword_free_1));
+        new_instruction(bind(is_valid));
+        new_instruction(ldr(qword_free_1, a64::ptr(qword_free_1)));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_pointer)));
     }
 
     void ARM64_Compiler::exec_asBC_CMPd(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
 
-        //        new_instruction(movsd(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(double_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(double_free_2, a64::ptr(vm_stack_frame_pointer, offset1)));
 
-        //        asmjit::Label is_less    = info->assembler.newLabel();
-        //        asmjit::Label is_greater = info->assembler.newLabel();
-        //        asmjit::Label end        = info->assembler.newLabel();
+        asmjit::Label is_less    = info->assembler.newLabel();
+        asmjit::Label is_greater = info->assembler.newLabel();
+        asmjit::Label end        = info->assembler.newLabel();
 
-        //        new_instruction(comisd(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(jnp(is_greater));
-        //        new_instruction(mov(vm_value_d, 0));
-        //        new_instruction(jmp(end));
+        new_instruction(fcmp(double_free_1, double_free_2));
+        new_instruction(b_ne(is_greater));
+        new_instruction(mov(vm_value_d, 0));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_greater));
-        //        new_instruction(jb(is_less));
-        //        new_instruction(mov(vm_value_d, 1));
-        //        new_instruction(jmp(end));
+        new_instruction(bind(is_greater));
+        new_instruction(b_mi(is_less));
+        new_instruction(mov(vm_value_d, 1));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_less));
-        //        new_instruction(mov(vm_value_d, -1));
-        //        new_instruction(bind(end));
+        new_instruction(bind(is_less));
+        new_instruction(mov(vm_value_d, -1));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_CMPu(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset1)));
 
-        //        asmjit::Label is_less    = info->assembler.newLabel();
-        //        asmjit::Label is_greater = info->assembler.newLabel();
-        //        asmjit::Label end        = info->assembler.newLabel();
+        asmjit::Label is_less    = info->assembler.newLabel();
+        asmjit::Label is_greater = info->assembler.newLabel();
+        asmjit::Label end        = info->assembler.newLabel();
 
-        //        new_instruction(cmp(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(jne(is_greater));
-        //        new_instruction(mov(vm_value_d, 0));
-        //        new_instruction(jmp(end));
+        new_instruction(cmp(dword_free_1, dword_free_2));
+        new_instruction(b_ne(is_greater));
+        new_instruction(mov(vm_value_d, 0));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_greater));
-        //        new_instruction(jb(is_less));
-        //        new_instruction(mov(vm_value_d, 1));
-        //        new_instruction(jmp(end));
+        new_instruction(bind(is_greater));
+        new_instruction(b_lo(is_less));
+        new_instruction(mov(vm_value_d, 1));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_less));
-        //        new_instruction(mov(vm_value_d, -1));
-        //        new_instruction(bind(end));
+        new_instruction(bind(is_less));
+        new_instruction(mov(vm_value_d, -1));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_CMPf(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
 
-        //        new_instruction(movss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(float_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(float_free_2, a64::ptr(vm_stack_frame_pointer, offset1)));
 
-        //        asmjit::Label is_less    = info->assembler.newLabel();
-        //        asmjit::Label is_greater = info->assembler.newLabel();
-        //        asmjit::Label end        = info->assembler.newLabel();
+        asmjit::Label is_less    = info->assembler.newLabel();
+        asmjit::Label is_greater = info->assembler.newLabel();
+        asmjit::Label end        = info->assembler.newLabel();
 
-        //        new_instruction(comiss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(jnp(is_greater));
-        //        new_instruction(mov(vm_value_d, 0));
-        //        new_instruction(jmp(end));
+        new_instruction(fcmpe(float_free_1, float_free_2));
+        new_instruction(b_ne(is_greater));
+        new_instruction(mov(vm_value_d, 0));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_greater));
-        //        new_instruction(jb(is_less));
-        //        new_instruction(mov(vm_value_d, 1));
-        //        new_instruction(jmp(end));
+        new_instruction(bind(is_greater));
+        new_instruction(b_mi(is_less));
+        new_instruction(mov(vm_value_d, 1));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_less));
-        //        new_instruction(mov(vm_value_d, -1));
-        //        new_instruction(bind(end));
+        new_instruction(bind(is_less));
+        new_instruction(mov(vm_value_d, -1));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_CMPi(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset1)));
 
-        //        asmjit::Label is_less    = info->assembler.newLabel();
-        //        asmjit::Label is_greater = info->assembler.newLabel();
-        //        asmjit::Label end        = info->assembler.newLabel();
+        asmjit::Label is_less    = info->assembler.newLabel();
+        asmjit::Label is_greater = info->assembler.newLabel();
+        asmjit::Label end        = info->assembler.newLabel();
 
-        //        new_instruction(cmp(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(jne(is_greater));
-        //        new_instruction(mov(vm_value_d, 0));
-        //        new_instruction(jmp(end));
+        new_instruction(cmp(dword_free_1, dword_free_2));
+        new_instruction(b_ne(is_greater));
+        new_instruction(mov(vm_value_d, 0));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_greater));
-        //        new_instruction(jl(is_less));
-        //        new_instruction(mov(vm_value_d, 1));
-        //        new_instruction(jmp(end));
+        new_instruction(bind(is_greater));
+        new_instruction(b_lt(is_less));
+        new_instruction(mov(vm_value_d, 1));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_less));
-        //        new_instruction(mov(vm_value_d, -1));
-        //        new_instruction(bind(end));
+        new_instruction(bind(is_less));
+        new_instruction(mov(vm_value_d, -1));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_CMPIi(CompileInfo* info)
     {
-        //        int value     = asBC_INTARG(info->address);
-        //        short offset0 = arg_offset(0);
+        int value     = arg_value_int();
+        short offset0 = arg_offset(0);
 
-        //        new_instruction(mov(qword_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
 
-        //        asmjit::Label is_less         = info->assembler.newLabel();
-        //        asmjit::Label is_greater_than = info->assembler.newLabel();
-        //        asmjit::Label end             = info->assembler.newLabel();
+        asmjit::Label is_less         = info->assembler.newLabel();
+        asmjit::Label is_greater_than = info->assembler.newLabel();
+        asmjit::Label end             = info->assembler.newLabel();
 
-        //        new_instruction(cmp(dword_free_1, value));
-        //        new_instruction(jne(is_greater_than));
-        //        new_instruction(mov(vm_value_d, 0));
-        //        new_instruction(jmp(end));
+        new_instruction(cmp(dword_free_1, value));
+        new_instruction(b_ne(is_greater_than));
+        new_instruction(mov(vm_value_d, 0));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_greater_than));
-        //        new_instruction(jle(is_less));
-        //        new_instruction(mov(vm_value_d, 1));
-        //        new_instruction(jmp(end));
+        new_instruction(bind(is_greater_than));
+        new_instruction(b_lt(is_less));
+        new_instruction(mov(vm_value_d, 1));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_less));
-        //        new_instruction(mov(vm_value_d, -1));
-        //        new_instruction(bind(end));
+        new_instruction(bind(is_less));
+        new_instruction(mov(vm_value_d, -1));
+        new_instruction(bind(end));
     }
 
 
     void ARM64_Compiler::exec_asBC_CMPIf(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        float value   = arg_value_float(0);
+        short offset0 = arg_offset(0);
+        float value   = arg_value_float(0);
 
-        //        new_instruction(movss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(float_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(float_free_2, info->insert_constant<float>(value)));
 
-        //        asmjit::Label is_less    = info->assembler.newLabel();
-        //        asmjit::Label is_greater = info->assembler.newLabel();
-        //        asmjit::Label end        = info->assembler.newLabel();
+        asmjit::Label is_less    = info->assembler.newLabel();
+        asmjit::Label is_greater = info->assembler.newLabel();
+        asmjit::Label end        = info->assembler.newLabel();
 
-        //        new_instruction(comiss(xmm_free_1, info->insert_constant<float>(value)));
-        //        new_instruction(jnp(is_greater));
-        //        new_instruction(mov(vm_value_d, 0));
-        //        new_instruction(jmp(end));
+        new_instruction(fcmpe(float_free_1, float_free_2));
+        new_instruction(b_ne(is_greater));
+        new_instruction(mov(vm_value_d, 0));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_greater));
-        //        new_instruction(jb(is_less));
-        //        new_instruction(mov(vm_value_d, 1));
-        //        new_instruction(jmp(end));
+        new_instruction(bind(is_greater));
+        new_instruction(b_mi(is_less));
+        new_instruction(mov(vm_value_d, 1));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_less));
-        //        new_instruction(mov(vm_value_d, -1));
-        //        new_instruction(bind(end));
+        new_instruction(bind(is_less));
+        new_instruction(mov(vm_value_d, -1));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_CMPIu(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        asDWORD value = arg_value_dword(0);
+        short offset0 = arg_offset(0);
+        asDWORD value = arg_value_dword(0);
 
-        //        new_instruction(mov(qword_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
 
-        //        asmjit::Label is_less    = info->assembler.newLabel();
-        //        asmjit::Label is_greater = info->assembler.newLabel();
-        //        asmjit::Label end        = info->assembler.newLabel();
+        asmjit::Label is_less    = info->assembler.newLabel();
+        asmjit::Label is_greater = info->assembler.newLabel();
+        asmjit::Label end        = info->assembler.newLabel();
 
-        //        new_instruction(cmp(dword_free_1, value));
-        //        new_instruction(jne(is_greater));
-        //        new_instruction(mov(vm_value_d, 0));
-        //        new_instruction(jmp(end));
+        new_instruction(cmp(dword_free_1, value));
+        new_instruction(b_ne(is_greater));
+        new_instruction(mov(vm_value_d, 0));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_greater));
-        //        new_instruction(jb(is_less));
-        //        new_instruction(mov(vm_value_d, 1));
-        //        new_instruction(jmp(end));
+        new_instruction(bind(is_greater));
+        new_instruction(b_lo(is_less));
+        new_instruction(mov(vm_value_d, 1));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_less));
-        //        new_instruction(mov(vm_value_d, -1));
-        //        new_instruction(bind(end));
+        new_instruction(bind(is_less));
+        new_instruction(mov(vm_value_d, -1));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_JMPP(CompileInfo* info)
@@ -1339,14 +1368,14 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_PopRPtr(CompileInfo* info)
     {
-        //        new_instruction(mov(vm_value_q, dword_ptr(vm_stack_pointer)));
-        //        new_instruction(add(vm_stack_pointer, ptr_size_1));
+        new_instruction(ldr(vm_value_q, a64::ptr(vm_stack_pointer)));
+        new_instruction(add(vm_stack_pointer, vm_stack_pointer, ptr_size_1));
     }
 
     void ARM64_Compiler::exec_asBC_PshRPtr(CompileInfo* info)
     {
-        //        new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        //        new_instruction(mov(dword_ptr(vm_stack_pointer), vm_value_q));
+        new_instruction(sub(vm_stack_pointer, vm_stack_pointer, ptr_size_1));
+        new_instruction(str(vm_value_q, a64::ptr(vm_stack_pointer)));
     }
 
     void ARM64_Compiler::exec_asBC_STR(CompileInfo* info)
@@ -1424,8 +1453,8 @@ namespace JIT
         //        Label is_valid = info->assembler.newLabel();
 
         //        new_instruction(cmp(qword_free_1, 0));
-        //        new_instruction(jne(is_valid));
-        //        new_instruction(call(make_exception_nullptr_access));
+        //        new_instruction(b_ne(is_valid));
+        //        new_instruction(b(make_exception_nullptr_access));
         //        new_instruction(bind(is_valid));
     }
 
@@ -1433,7 +1462,7 @@ namespace JIT
     {
         //        short offset = -arg_offset(0);
 
-        //        // TODO: Maybe it can be optimized?
+        // TODO: Maybe it can be optimized?
         //        new_instruction(mov(qword_free_1, vm_stack_pointer));
         //        new_instruction(add(qword_free_1, offset));
         //        new_instruction(mov(qword_free_3, qword_ptr(qword_free_1)));
@@ -1483,18 +1512,19 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_SetV4(CompileInfo* info)
     {
-        //        short offset  = arg_offset(0);
-        //        asDWORD value = asBC_DWORDARG(info->address);
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset), value));
+        short offset  = arg_offset(0);
+        asDWORD value = arg_value_dword(0);
+        new_instruction(mov(qword_free_1, value));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_SetV8(CompileInfo* info)
     {
-        //        asQWORD value = arg_value_qword();
-        //        short offset  = arg_offset(0);
+        asQWORD value = arg_value_qword();
+        short offset  = arg_offset(0);
 
-        //        new_instruction(mov(qword_free_2, value));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset), qword_free_2));
+        new_instruction(mov(qword_free_2, value));
+        new_instruction(str(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_ADDSi(CompileInfo* info)
@@ -1504,8 +1534,8 @@ namespace JIT
 
         //        Label is_valid = info->assembler.newLabel();
 
-        //        new_instruction(jne(is_valid));
-        //        new_instruction(call(make_exception_nullptr_access));
+        //        new_instruction(b_ne(is_valid));
+        //        new_instruction(b(make_exception_nullptr_access));
 
         //        short offset = arg_value_short(0);
         //        new_instruction(bind(is_valid));
@@ -1515,26 +1545,26 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_CpyVtoV4(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
 
-        //        new_instruction(mov(dword_free_2, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_2));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(str(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_CpyVtoV8(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
 
-        //        new_instruction(mov(qword_free_2, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), qword_free_2));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(str(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_CpyVtoR4(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        new_instruction(mov(vm_value_d, dword_ptr(vm_stack_frame_pointer, offset0)));
+        short offset0 = arg_offset(0);
+        new_instruction(ldr(vm_value_d, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_CpyVtoR8(CompileInfo* info)
@@ -1639,10 +1669,12 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_LDV(CompileInfo* info)
     {
-        //        short offset = arg_offset(0);
-        //        new_instruction(mov(qword_free_1, vm_stack_frame_pointer));
-        //        new_instruction(add(qword_free_1, offset));
-        //        new_instruction(mov(vm_value_q, qword_free_1));
+        short offset = arg_offset(0);
+
+        new_instruction(mov(qword_free_1, vm_stack_frame_pointer));
+        new_instruction(mov(qword_free_2, offset));
+        new_instruction(add(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(mov(vm_value_q, qword_free_1));
     }
 
     void ARM64_Compiler::exec_asBC_PGA(CompileInfo* info)
@@ -1668,69 +1700,70 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_iTOf(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
+        short offset = arg_offset(0);
 
-        //        new_instruction(pxor(xmm_free_1, xmm_free_1));
-        //        new_instruction(cvtsi2ss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset0)));
-        //        new_instruction(movss(qword_ptr(vm_stack_frame_pointer, offset0), xmm_free_1));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(scvtf(float_free_1, dword_free_1));
+        new_instruction(str(float_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_fTOi(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
+        short offset = arg_offset(0);
 
-        //        new_instruction(cvttss2si(dword_free_2, dword_ptr(vm_stack_frame_pointer, offset0)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_2));
+        new_instruction(ldr(float_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(fcvtzs(dword_free_1, float_free_1));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_uTOf(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        save_registers(info);
-        //        new_instruction(mov(dword_firts_arg, dword_ptr(vm_stack_frame_pointer, offset0)));
-        //        new_instruction(call(uint_to_float));
-        //        restore_registers(info);
-        //        new_instruction(movss(dword_ptr(qword_free_1, offset0), float_return));
+        short offset = arg_offset(0);
+
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(ucvtf(float_free_1, dword_free_1));
+        new_instruction(str(float_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_fTOu(CompileInfo* info)
     {
-        //        short offset = arg_offset(0);
+        short offset = arg_offset(0);
 
-        //        new_instruction(cvttss2si(qword_free_2, dword_ptr(vm_stack_frame_pointer, offset)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset), qword_free_2));
+        new_instruction(ldr(float_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(fcvtzs(dword_free_1, float_free_1));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_sbTOi(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
+        short offset0 = arg_offset(0);
 
-        //        new_instruction(movsx(dword_free_2, byte_ptr(vm_stack_frame_pointer, offset0)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_2));
+        new_instruction(ldrsb(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(str(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_swTOi(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
+        short offset0 = arg_offset(0);
 
-        //        new_instruction(movsx(dword_free_2, word_ptr(vm_stack_frame_pointer, offset0)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_2));
+        new_instruction(ldrsh(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(str(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_ubTOi(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
+        short offset0 = arg_offset(0);
 
-        //        new_instruction(movzx(dword_free_2, byte_ptr(vm_stack_frame_pointer, offset0)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_2));
+        new_instruction(ldrb(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(str(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_uwTOi(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
+        short offset0 = arg_offset(0);
 
-        //        new_instruction(movzx(dword_free_2, word_ptr(vm_stack_frame_pointer, offset0)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_2));
+        new_instruction(ldrh(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(str(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_dTOi(CompileInfo* info)
@@ -1780,120 +1813,130 @@ namespace JIT
 
         //        save_registers(info);
         //        new_instruction(mov(dword_firts_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(call(uint_to_double));
+        //        new_instruction(b(uint_to_double));
         //        restore_registers(info);
         //        new_instruction(movsd(dword_ptr(vm_stack_frame_pointer, offset0), double_return));
     }
 
     void ARM64_Compiler::exec_asBC_fTOd(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
 
-        //        new_instruction(pxor(xmm_free_1, xmm_free_1));
-        //        new_instruction(cvtss2sd(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(movsd(qword_ptr(vm_stack_frame_pointer, offset0), xmm_free_1));
+        new_instruction(ldr(float_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(fcvt(double_free_1, float_free_1));
+        new_instruction(str(double_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_ADDi(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(add(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_1));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(add(dword_free_1, dword_free_1, dword_free_2));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_SUBi(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(sub(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_1));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(sub(dword_free_1, dword_free_1, dword_free_2));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_MULi(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(imul(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_free_1));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(mul(dword_free_1, dword_free_1, dword_free_2));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_DIVi(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(dword_div_first_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(cdq());
-        //        new_instruction(idiv(dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_div_first_arg));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(sdiv(dword_free_1, dword_free_1, dword_free_2));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_MODi(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(dword_div_first_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(cdq());
-        //        new_instruction(idiv(dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_div_mod_result));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(dword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(sdiv(dword_free_3, dword_free_1, dword_free_2));
+        new_instruction(ldr(dword_free_2, a64::ptr(stack_pointer, 8)));
+        new_instruction(mul(dword_free_2, dword_free_3, dword_free_2));
+        new_instruction(sub(dword_free_1, dword_free_1, dword_free_2));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_ADDf(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(movss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(addss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(movss(dword_ptr(vm_stack_frame_pointer, offset0), xmm_free_1));
+        new_instruction(ldr(float_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(float_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(fadd(float_free_1, float_free_1, float_free_2));
+        new_instruction(str(float_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_SUBf(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(movss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(subss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(movss(dword_ptr(vm_stack_frame_pointer, offset0), xmm_free_1));
+        new_instruction(ldr(float_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(float_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(fsub(float_free_1, float_free_1, float_free_2));
+        new_instruction(str(float_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_MULf(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(movss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(mulss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(movss(dword_ptr(vm_stack_frame_pointer, offset0), xmm_free_1));
+        new_instruction(ldr(float_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(float_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(fmul(float_free_1, float_free_1, float_free_2));
+        new_instruction(str(float_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_DIVf(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(movss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(divss(xmm_free_1, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(movss(dword_ptr(vm_stack_frame_pointer, offset0), xmm_free_1));
+        new_instruction(ldr(float_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(float_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(fdiv(float_free_1, float_free_1, float_free_2));
+        new_instruction(str(float_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_MODf(CompileInfo* info)
@@ -1905,7 +1948,7 @@ namespace JIT
         //        save_registers(info);
         //        new_instruction(movss(float_firts_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
         //        new_instruction(movss(float_second_arg, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(call(mod_float));
+        //        new_instruction(b(mod_float));
         //        restore_registers(info);
         //        new_instruction(movss(dword_ptr(vm_stack_frame_pointer, offset0), float_return));
     }
@@ -1963,7 +2006,7 @@ namespace JIT
         //        save_registers(info);
         //        new_instruction(movsd(double_firts_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
         //        new_instruction(movsd(double_second_arg, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(call(mod_double));
+        //        new_instruction(b(mod_double));
         //        restore_registers(info);
         //        new_instruction(movsd(dword_ptr(vm_stack_frame_pointer, offset0), double_return));
     }
@@ -2049,8 +2092,8 @@ namespace JIT
         //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_pointer)));
         //        new_instruction(mov(qword_free_1, qword_ptr(qword_free_1)));
         //        new_instruction(cmp(qword_free_1, 0));
-        //        new_instruction(jne(is_valid));
-        //        new_instruction(call(make_exception_nullptr_access));
+        //        new_instruction(b_ne(is_valid));
+        //        new_instruction(b(make_exception_nullptr_access));
         //        new_instruction(bind(is_valid));
     }
 
@@ -2061,8 +2104,8 @@ namespace JIT
 
         //        Label is_valid = info->assembler.newLabel();
         //        new_instruction(cmp(dword_free_1, 0));
-        //        new_instruction(jne(is_valid));
-        //        new_instruction(call(make_exception_nullptr_access));
+        //        new_instruction(b_ne(is_valid));
+        //        new_instruction(b(make_exception_nullptr_access));
         //        new_instruction(bind(is_valid));
     }
 
@@ -2085,18 +2128,20 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_SetV1(CompileInfo* info)
     {
-        //        short value   = arg_value_dword(0);
-        //        short offset0 = arg_offset(0);
+        short value   = arg_value_dword(0);
+        short offset0 = arg_offset(0);
 
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), value));
+        new_instruction(mov(dword_free_1, value));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_SetV2(CompileInfo* info)
     {
-        //        short value   = arg_value_dword(0);
-        //        short offset0 = arg_offset(0);
+        short value   = arg_value_dword(0);
+        short offset0 = arg_offset(0);
 
-        //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), value));
+        new_instruction(mov(dword_free_1, value));
+        new_instruction(str(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_Cast(CompileInfo* info)
@@ -2115,21 +2160,22 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_uTOi64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(sxtw(qword_free_1, dword_free_1));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_iTOi64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
 
-        //        new_instruction(mov(dword_free_1, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(cdqe());
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+        new_instruction(ldr(dword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(sxtw(qword_free_1, dword_free_1));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_fTOi64(CompileInfo* info)
@@ -2158,7 +2204,7 @@ namespace JIT
 
         //        save_registers(info);
         //        new_instruction(movss(float_firts_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(call(float_to_uint64));
+        //        new_instruction(b(float_to_uint64));
         //        restore_registers(info);
         //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), qword_return));
     }
@@ -2169,7 +2215,7 @@ namespace JIT
 
         //        save_registers(info);
         //        new_instruction(movsd(double_firts_arg, dword_ptr(vm_stack_frame_pointer, offset0)));
-        //        new_instruction(call(double_to_uint64));
+        //        new_instruction(b(double_to_uint64));
         //        restore_registers(info);
         //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), qword_return));
     }
@@ -2191,7 +2237,7 @@ namespace JIT
 
         //        save_registers(info);
         //        new_instruction(mov(qword_first_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(call(uint64_to_float));
+        //        new_instruction(b(uint64_to_float));
         //        restore_registers(info);
         //        new_instruction(movss(dword_ptr(vm_stack_frame_pointer, offset0), float_return));
     }
@@ -2211,219 +2257,239 @@ namespace JIT
 
         //save_registers(info);
         //new_instruction(mov(qword_first_arg, dword_ptr(vm_stack_frame_pointer, offset0)));
-        //new_instruction(call(uint64_to_double));
+        //new_instruction(b(uint64_to_double));
         //restore_registers(info);
         //new_instruction(movsd(dword_ptr(vm_stack_frame_pointer, offset0), xmm_free_1));
     }
 
     void ARM64_Compiler::exec_asBC_NEGi64(CompileInfo* info)
     {
-        // short offset = arg_offset(0);
-        // new_instruction(neg(qword_ptr(vm_stack_frame_pointer, offset)));
+        short offset = arg_offset(0);
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(neg(qword_free_1, qword_free_1));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_INCi64(CompileInfo* info)
     {
-        // new_instruction(inc(qword_ptr(vm_value_q)));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_value_q)));
+        new_instruction(add(qword_free_1, qword_free_1, 1));
+        new_instruction(str(qword_free_1, a64::ptr(vm_value_q)));
     }
 
     void ARM64_Compiler::exec_asBC_DECi64(CompileInfo* info)
     {
-        // new_instruction(dec(qword_ptr(vm_value_q)));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_value_q)));
+        new_instruction(sub(qword_free_1, qword_free_1, 1));
+        new_instruction(str(qword_free_1, a64::ptr(vm_value_q)));
     }
 
     void ARM64_Compiler::exec_asBC_BNOT64(CompileInfo* info)
     {
-        //short offset = arg_offset(0);
-        //new_instruction(not_(qword_ptr(vm_stack_frame_pointer, offset)));
+        short offset = arg_offset(0);
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(mvn(qword_free_1, qword_free_1));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset)));
     }
 
     void ARM64_Compiler::exec_asBC_ADDi64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(add(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(add(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_SUBi64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(sub(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(sub(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_MULi64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(imul(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(mul(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_DIVi64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(qword_div_first_arg, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(cdq());
-        //        new_instruction(idiv(qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_div_first_arg));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(sdiv(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_MODi64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(qword_div_first_arg, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(cdq());
-        //        new_instruction(idiv(qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_div_mod_result));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(sdiv(qword_free_3, qword_free_1, qword_free_2));
+        new_instruction(ldr(qword_free_2, a64::ptr(stack_pointer, 8)));
+        new_instruction(mul(qword_free_2, qword_free_3, qword_free_2));
+        new_instruction(sub(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_BAND64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(and_(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(and_(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_BOR64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(or_(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(orr(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_BXOR64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(xor_(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(eor(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_BSLL64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(mov(shift_second_arg, qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(sal(dword_free_1, shift_second_arg));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(lsl(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_BSRL64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(mov(shift_second_arg, qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(shr(qword_free_1, shift_second_arg));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(lsl(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_BSRA64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
-        //        short offset2 = arg_offset(2);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
+        short offset2 = arg_offset(2);
 
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(mov(shift_second_arg, qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(sar(qword_free_1, shift_second_arg));
-        //        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, offset0), qword_free_1));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset1)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset2)));
+        new_instruction(lsr(qword_free_1, qword_free_1, qword_free_2));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
     }
 
     void ARM64_Compiler::exec_asBC_CMPi64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
 
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset1)));
 
-        //        asmjit::Label is_less    = info->assembler.newLabel();
-        //        asmjit::Label is_greater = info->assembler.newLabel();
-        //        asmjit::Label end        = info->assembler.newLabel();
+        asmjit::Label is_less    = info->assembler.newLabel();
+        asmjit::Label is_greater = info->assembler.newLabel();
+        asmjit::Label end        = info->assembler.newLabel();
 
-        //        new_instruction(cmp(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(jne(is_greater));
-        //        new_instruction(mov(vm_value_d, 0));
-        //        new_instruction(jmp(end));
+        new_instruction(cmp(qword_free_1, qword_free_1));
+        new_instruction(b_ne(is_greater));
+        new_instruction(mov(vm_value_d, 0));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_greater));
-        //        new_instruction(jl(is_less));
-        //        new_instruction(mov(vm_value_d, 1));
-        //        new_instruction(jmp(end));
+        new_instruction(bind(is_greater));
+        new_instruction(b_lt(is_less));
+        new_instruction(mov(vm_value_d, 1));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_less));
-        //        new_instruction(mov(vm_value_d, -1));
-        //        new_instruction(bind(end));
+        new_instruction(bind(is_less));
+        new_instruction(mov(vm_value_d, -1));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_CMPu64(CompileInfo* info)
     {
-        //        short offset0 = arg_offset(0);
-        //        short offset1 = arg_offset(1);
+        short offset0 = arg_offset(0);
+        short offset1 = arg_offset(1);
 
-        //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_frame_pointer, offset0)));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset1)));
 
-        //        asmjit::Label is_less    = info->assembler.newLabel();
-        //        asmjit::Label is_greater = info->assembler.newLabel();
-        //        asmjit::Label end        = info->assembler.newLabel();
+        asmjit::Label is_less    = info->assembler.newLabel();
+        asmjit::Label is_greater = info->assembler.newLabel();
+        asmjit::Label end        = info->assembler.newLabel();
 
-        //        new_instruction(cmp(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset1)));
-        //        new_instruction(jne(is_greater));
-        //        new_instruction(mov(vm_value_d, 0));
-        //        new_instruction(jmp(end));
+        new_instruction(cmp(qword_free_1, qword_free_2));
+        new_instruction(b_ne(is_greater));
+        new_instruction(mov(vm_value_d, 0));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_greater));
-        //        new_instruction(jb(is_less));
-        //        new_instruction(mov(vm_value_d, 1));
-        //        new_instruction(jmp(end));
+        new_instruction(bind(is_greater));
+        new_instruction(b_lo(is_less));
+        new_instruction(mov(vm_value_d, 1));
+        new_instruction(b(end));
 
-        //        new_instruction(bind(is_less));
-        //        new_instruction(mov(vm_value_d, -1));
-        //        new_instruction(bind(end));
+        new_instruction(bind(is_less));
+        new_instruction(mov(vm_value_d, -1));
+        new_instruction(bind(end));
     }
 
     void ARM64_Compiler::exec_asBC_ChkNullS(CompileInfo* info)
     {
-        //        short offset = arg_offset(0);
-        //        new_instruction(cmp(qword_ptr(vm_stack_pointer, offset), 0));
-        //        Label is_valid = info->assembler.newLabel();
-        //        new_instruction(jne(is_valid));
-        //        new_instruction(call(make_exception_nullptr_access));
-        //        new_instruction(bind(is_valid));
+        short offset = arg_offset(0);
+        new_instruction(ldr(qword_free_1, a64::ptr(vm_stack_pointer, offset)));
+        new_instruction(cmp(qword_free_1, 0));
+        Label is_valid = info->assembler.newLabel();
+        new_instruction(b_ne(is_valid));
+        new_instruction(b(make_exception_nullptr_access));
+        new_instruction(bind(is_valid));
     }
 
     void ARM64_Compiler::exec_asBC_ClrHi(CompileInfo* info)
@@ -2444,10 +2510,10 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_FuncPtr(CompileInfo* info)
     {
-        //        asPWORD ptr = arg_value_ptr();
-        //        new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        //        new_instruction(mov(qword_free_1, ptr));
-        //        new_instruction(mov(qword_ptr(vm_stack_pointer), qword_free_1));
+        asPWORD ptr = arg_value_ptr();
+        new_instruction(sub(vm_stack_pointer, vm_stack_pointer, ptr_size_1));
+        new_instruction(mov(qword_free_1, ptr));
+        new_instruction(str(qword_free_1, a64::ptr(vm_stack_pointer)));
     }
 
     void ARM64_Compiler::exec_asBC_LoadThisR(CompileInfo* info)
@@ -2459,8 +2525,8 @@ namespace JIT
         //        new_instruction(mov(vm_value_q, qword_ptr(vm_stack_frame_pointer)));
         //        new_instruction(cmp(vm_value_q, 0));
 
-        //        new_instruction(jne(is_valid));
-        //        new_instruction(call(make_exception_nullptr_access));
+        //        new_instruction(b_ne(is_valid));
+        //        new_instruction(b(make_exception_nullptr_access));
 
         //        new_instruction(bind(is_valid));
         //        new_instruction(add(vm_value_q, value0));
@@ -2468,11 +2534,11 @@ namespace JIT
 
     void ARM64_Compiler::exec_asBC_PshV8(CompileInfo* info)
     {
-        //        short offset = arg_offset(0);
+        short offset = arg_offset(0);
 
-        //        new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        //        new_instruction(mov(qword_free_2, qword_ptr(vm_stack_frame_pointer, offset)));
-        //        new_instruction(mov(qword_ptr(vm_stack_pointer), qword_free_2));
+        new_instruction(sub(vm_stack_pointer, vm_stack_pointer, ptr_size_1));
+        new_instruction(ldr(qword_free_2, a64::ptr(vm_stack_frame_pointer, offset)));
+        new_instruction(str(qword_free_2, a64::ptr(vm_stack_pointer)));
     }
 
     void ARM64_Compiler::exec_asBC_DIVu(CompileInfo* info)
@@ -2535,8 +2601,8 @@ namespace JIT
         //        new_instruction(mov(qword_free_2, qword_ptr(qword_free_1)));
         //        new_instruction(cmp(qword_free_2, 0));
 
-        //        new_instruction(jne(is_valid));
-        //        new_instruction(call(make_exception_nullptr_access));
+        //        new_instruction(b_ne(is_valid));
+        //        new_instruction(b(make_exception_nullptr_access));
 
         //        new_instruction(bind(is_valid));
         //        new_instruction(add(qword_free_2, offset1));
@@ -2569,7 +2635,7 @@ namespace JIT
     {
         //        size_t label_index = find_label_for_jump(info);
         //        new_instruction(cmp(vm_value_b, 0));
-        //        new_instruction(jne(info->labels[label_index].label));
+        //        new_instruction(b_ne(info->labels[label_index].label));
     }
 
     void ARM64_Compiler::exec_asBC_AllocMem(CompileInfo* info)
@@ -2591,9 +2657,9 @@ namespace JIT
         //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset)));
 
         //        new_instruction(cmp(qword_free_1, 0));
-        //        new_instruction(jne(is_valid));
-        //        new_instruction(call(make_exception_nullptr_access));
-        //        new_instruction(jmp(end));
+        //        new_instruction(b_ne(is_valid));
+        //        new_instruction(b(make_exception_nullptr_access));
+        //        new_instruction(b(end));
 
         //        new_instruction(bind(is_valid));
         //        new_instruction(mov(dword_ptr(qword_free_1, off), size));
@@ -2612,9 +2678,9 @@ namespace JIT
         //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset)));
 
         //        new_instruction(cmp(qword_free_1, 0));
-        //        new_instruction(jne(is_valid));
-        //        new_instruction(call(make_exception_nullptr_access));
-        //        new_instruction(jmp(end));
+        //        new_instruction(b_ne(is_valid));
+        //        new_instruction(b(make_exception_nullptr_access));
+        //        new_instruction(b(end));
 
         //        new_instruction(bind(is_valid));
         //        new_instruction(add(qword_free_1, off));
@@ -2636,9 +2702,9 @@ namespace JIT
         //        new_instruction(mov(qword_free_1, qword_ptr(vm_stack_frame_pointer, offset)));
 
         //        new_instruction(cmp(qword_free_1, 0));
-        //        new_instruction(jne(is_valid));
-        //        new_instruction(call(make_exception_nullptr_access));
-        //        new_instruction(jmp(end));
+        //        new_instruction(b_ne(is_valid));
+        //        new_instruction(b(make_exception_nullptr_access));
+        //        new_instruction(b(end));
 
         //        new_instruction(bind(is_valid));
         //        new_instruction(mov(dword_ptr(qword_free_1, off), type));
@@ -2655,7 +2721,7 @@ namespace JIT
         //        save_registers(info);
         //        new_instruction(mov(dword_firts_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
         //        new_instruction(mov(dword_second_arg, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(call(ipow));
+        //        new_instruction(b(ipow));
         //        restore_registers(info);
         //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_return));
     }
@@ -2669,7 +2735,7 @@ namespace JIT
         //        save_registers(info);
         //        new_instruction(mov(dword_firts_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
         //        new_instruction(mov(dword_second_arg, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(call(upow));
+        //        new_instruction(b(upow));
         //        restore_registers(info);
         //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), dword_return));
     }
@@ -2683,7 +2749,7 @@ namespace JIT
         //        save_registers(info);
         //        new_instruction(movss(float_firts_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
         //        new_instruction(movss(float_second_arg, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(call(fpow));
+        //        new_instruction(b(fpow));
         //        restore_registers(info);
         //        new_instruction(movss(dword_ptr(vm_stack_frame_pointer, offset0), float_return));
     }
@@ -2697,7 +2763,7 @@ namespace JIT
         //        save_registers(info);
         //        new_instruction(movsd(double_firts_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
         //        new_instruction(movsd(double_second_arg, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(call(dpow));
+        //        new_instruction(b(dpow));
         //        restore_registers(info);
         //        new_instruction(movsd(dword_ptr(vm_stack_frame_pointer, offset0), double_return));
     }
@@ -2711,7 +2777,7 @@ namespace JIT
         //        save_registers(info);
         //        new_instruction(movsd(double_firts_arg, dword_ptr(vm_stack_frame_pointer, offset1)));
         //        new_instruction(mov(dword_firts_arg, dword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(call(dipow));
+        //        new_instruction(b(dipow));
         //        restore_registers(info);
         //        new_instruction(movsd(dword_ptr(vm_stack_frame_pointer, offset0), double_return));
     }
@@ -2725,7 +2791,7 @@ namespace JIT
         //        save_registers(info);
         //        new_instruction(mov(qword_first_arg, qword_ptr(vm_stack_frame_pointer, offset1)));
         //        new_instruction(mov(qword_second_arg, qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(call(i64pow));
+        //        new_instruction(b(i64pow));
         //        restore_registers(info);
         //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), qword_return));
     }
@@ -2739,7 +2805,7 @@ namespace JIT
         //        save_registers(info);
         //        new_instruction(mov(qword_first_arg, qword_ptr(vm_stack_frame_pointer, offset1)));
         //        new_instruction(mov(qword_second_arg, qword_ptr(vm_stack_frame_pointer, offset2)));
-        //        new_instruction(call(u64pow));
+        //        new_instruction(b(u64pow));
         //        restore_registers(info);
         //        new_instruction(mov(dword_ptr(vm_stack_frame_pointer, offset0), qword_return));
     }

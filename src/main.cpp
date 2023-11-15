@@ -2,6 +2,7 @@
 #include <chrono>
 #include <fstream>
 #include <arm64/compiler.hpp>
+#include <x86-64/compiler.hpp>
 
 
 void print(const std::string& str)
@@ -40,8 +41,11 @@ try
     asInitializeAddons(engine);
 
     engine->RegisterGlobalFunction("void print(const string& in)", asFUNCTION(print), asCALL_CDECL);
-
+#if defined(__aarch64__)
     JIT::ARM64_Compiler compiler;
+#else
+    JIT::X86_64_Compiler compiler;
+#endif
     engine->SetJITCompiler(&compiler);
 
     std::string current_name = "";

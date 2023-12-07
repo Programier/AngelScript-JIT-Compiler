@@ -1,3 +1,6 @@
 CMakeLists.txt.user
 /build*/
+/out/
+/.vs/
+CMakeSettings.json
 /angelscript/

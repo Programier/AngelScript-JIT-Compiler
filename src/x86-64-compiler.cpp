@@ -44,7 +44,12 @@
     printf("Function %s need implementaion!\n", __FUNCTION__);                                                         \
     RETURN_CONTROL_TO_VM()
 #define CHECK_IT() printf("Function %s marked for check\n", __FUNCTION__)
+
+#if USING_GCC_COMPILER
 #define MAYBE_UNUSED __attribute__((unused))
+#elif USING_MSVC_COMPILER
+#define MAYBE_UNUSED
+#endif
 
 #define arg_value_dword(offset) asBC_DWORDARG(info->address + offset)
 #define arg_value_int() asBC_INTARG(info->address)
@@ -52,7 +57,7 @@
 #define arg_value_float(offset) asBC_FLOATARG(info->address + offset)
 #define arg_value_ptr() asBC_PTRARG(info->address)
 #define arg_value_word(index) (*(((asWORD*) info->address) + index + 1))
-#define arg_value_short(index) (*(((short*) info->address) + index + 1))
+#define arg_value_short(index) (*(((signed short*) info->address) + index + 1))
 #define arg_offset(index) (-(*(((short*) info->address) + index + 1)) * sizeof(asDWORD))
 #define new_instruction(x) catch_errors(info->assembler.x)
 
@@ -207,29 +212,29 @@ namespace JIT
         return fmodf(a, b);
     }
 
-    static float STDCALL_DECL mod_double(double a, double b)
+    static double STDCALL_DECL mod_double(double a, double b)
     {
         return std::fmod(a, b);
     }
 
     static int32_t STDCALL_DECL ipow(int32_t a, int32_t b)
     {
-        return std::pow<int32_t, int32_t>(a, b);
+        return static_cast<int32_t>(std::pow<int32_t, int32_t>(a, b));
     }
 
     static uint32_t STDCALL_DECL upow(uint32_t a, uint32_t b)
     {
-        return std::pow<uint32_t, uint32_t>(a, b);
+        return static_cast<uint32_t>(std::pow<uint32_t, uint32_t>(a, b));
     }
 
     static int64_t STDCALL_DECL i64pow(int64_t a, int64_t b)
     {
-        return std::pow<int64_t, int64_t>(a, b);
+        return static_cast<int64_t>(std::pow<int64_t, int64_t>(a, b));
     }
 
     static uint64_t STDCALL_DECL u64pow(uint64_t a, uint64_t b)
     {
-        return std::pow<uint64_t, uint64_t>(a, b);
+        return static_cast<uint64_t>(std::pow<uint64_t, uint64_t>(a, b));
     }
 
     static float STDCALL_DECL fpow(float a, float b)
@@ -631,7 +636,7 @@ namespace JIT
 
         // Restore position of execution
         new_instruction(lea(qword_free_1, qword_ptr(rip)));
-        info->header_size = info->assembler.offset();
+        info->header_size = static_cast<asUINT>(info->assembler.offset());
         new_instruction(add(qword_free_1, qword_second_arg));
         new_instruction(jmp(qword_free_1));
 

@@ -44,7 +44,12 @@
     printf("Function %s need implementaion!\n", __FUNCTION__);                                                         \
     RETURN_CONTROL_TO_VM()
 #define CHECK_IT() printf("Function %s marked for check\n", __FUNCTION__)
+
+#if USING_GCC_COMPILER
 #define MAYBE_UNUSED __attribute__((unused))
+#elif USING_MSVC_COMPILER
+#define MAYBE_UNUSED
+#endif
 
 #define arg_value_dword(offset) asBC_DWORDARG(info->address + offset)
 #define arg_value_int() asBC_INTARG(info->address)

@@ -742,11 +742,11 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_PshGPtr(CompileInfo* info)
     {
-        asPWORD value = *(asPWORD*) asBC_PTRARG(info->address);
-
+        asPWORD* value = (asPWORD*) asBC_PTRARG(info->address);
         new_instruction(sub(vm_stack_pointer, ptr_size_1));
-        new_instruction(movabs(qword_free_1, value));
-        new_instruction(mov(dword_ptr(vm_stack_pointer), qword_free_1));
+        new_instruction(mov(qword_free_1, value));
+        new_instruction(mov(qword_free_1, qword_ptr(qword_free_1)));
+        new_instruction(mov(qword_ptr(vm_stack_pointer), qword_free_1));
     }
 
     void X86_64_Compiler::exec_asBC_PshC4(CompileInfo* info)
@@ -1467,16 +1467,16 @@ namespace JIT
 
     void X86_64_Compiler::exec_asBC_GETOBJ(CompileInfo* info)
     {
-        short offset = -arg_offset(0);
+        short offset = arg_value_word(0) * sizeof(asDWORD);
         new_instruction(mov(qword_free_1, vm_stack_pointer));
         new_instruction(add(qword_free_1, offset));
 
         new_instruction(mov(qword_free_2, qword_ptr(qword_free_1)));
         new_instruction(imul(qword_free_2, -sizeof(asDWORD)));
 
-        new_instruction(mov(qword_free_3, qword_ptr(vm_stack_pointer, qword_free_2)));
+        new_instruction(mov(qword_free_3, qword_ptr(vm_stack_frame_pointer, qword_free_2)));
         new_instruction(mov(qword_ptr(qword_free_1), qword_free_3));
-        new_instruction(mov(qword_ptr(vm_stack_pointer, qword_free_2), 0));
+        new_instruction(mov(qword_ptr(vm_stack_frame_pointer, qword_free_2), 0));
     }
 
     void X86_64_Compiler::exec_asBC_REFCPY(CompileInfo* info)
